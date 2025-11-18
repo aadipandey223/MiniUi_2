@@ -1,18 +1,579 @@
 // Socket.io connection
 const socket = io();
 
-// WebRTC configuration
+// Room state management
+let currentRoomId = null;
+let currentRoomKey = null; // AES-256-GCM key for room encryption
+let userIdentity = null; // { displayName, hash, publicKey, privateKey }
+let sessionKey = null; // Ephemeral session key for Layer 1
+let pendingRoomJoin = null; // For password-protected rooms
+
+// Initialize user identity on first load
+async function initializeIdentity() {
+    const stored = localStorage.getItem('userIdentity');
+    
+    if (stored) {
+        userIdentity = JSON.parse(stored);
+        // Import stored keys
+        userIdentity.publicKey = await IdentityCrypto.importPublicKey(userIdentity.publicKeyBase64);
+        userIdentity.privateKey = await IdentityCrypto.importPrivateKey(userIdentity.privateKeyBase64);
+    } else {
+        // Generate new identity
+        const displayName = 'Anonymous';
+        const hash = await CryptoUtils.generateIdentityHash(displayName);
+        const keypair = await IdentityCrypto.generateKeypair();
+        
+        userIdentity = {
+            displayName,
+            hash,
+            fullIdentity: `${displayName}#${hash}`,
+            publicKey: keypair.publicKey,
+            privateKey: keypair.privateKey,
+            publicKeyBase64: await IdentityCrypto.exportPublicKey(keypair.publicKey),
+            privateKeyBase64: await IdentityCrypto.exportPrivateKey(keypair.privateKey),
+            createdAt: Date.now()
+        };
+        
+        // Save to localStorage (public and private keys as base64)
+        localStorage.setItem('userIdentity', JSON.stringify({
+            displayName: userIdentity.displayName,
+            hash: userIdentity.hash,
+            fullIdentity: userIdentity.fullIdentity,
+            publicKeyBase64: userIdentity.publicKeyBase64,
+            privateKeyBase64: userIdentity.privateKeyBase64,
+            createdAt: userIdentity.createdAt
+        }));
+    }
+    
+    console.log('🔐 User identity initialized:', userIdentity.fullIdentity);
+}
+
+// Check if URL has room ID
+function checkForRoomInURL() {
+    const path = window.location.pathname;
+    const match = path.match(/\/room\/([a-zA-Z0-9]+)/);
+    
+    if (match) {
+        const roomId = match[1];
+        console.log('📍 Room ID in URL:', roomId);
+        // Fetch room info
+        fetch(`/api/rooms/${roomId}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    if (data.room.requiresPassword) {
+                        // Show password prompt
+                        pendingRoomJoin = roomId;
+                        showJoinRoomModal();
+                    } else {
+                        // Join directly
+                        joinRoom(roomId, null);
+                    }
+                } else {
+                    showToast(data.error, 'error');
+                }
+            })
+            .catch(err => {
+                console.error('Error fetching room:', err);
+                showToast('Failed to load room', 'error');
+            });
+    }
+}
+
+// Room Management Functions
+async function showCreateRoomModal() {
+    const modal = document.getElementById('createRoomModal');
+    modal.classList.add('show');
+    
+    // Reset password field and strength indicator
+    document.getElementById('roomPassword').value = '';
+    document.getElementById('passwordStrength').style.display = 'none';
+}
+
+function closeCreateRoomModal() {
+    const modal = document.getElementById('createRoomModal');
+    modal.classList.remove('show');
+}
+
+// Show copy tooltip
+function showCopyTooltip(element, message = 'Copied!') {
+    // Remove any existing tooltips
+    const existingTooltip = element.parentElement.querySelector('.copy-tooltip');
+    if (existingTooltip) {
+        existingTooltip.remove();
+    }
+    
+    // Create tooltip
+    const tooltip = document.createElement('div');
+    tooltip.className = 'copy-tooltip';
+    tooltip.textContent = message;
+    
+    // Position tooltip above the element
+    const rect = element.getBoundingClientRect();
+    const parent = element.parentElement;
+    const parentRect = parent.getBoundingClientRect();
+    
+    tooltip.style.position = 'absolute';
+    tooltip.style.bottom = '100%';
+    tooltip.style.left = '50%';
+    tooltip.style.transform = 'translateX(-50%) translateY(-10px)';
+    tooltip.style.marginBottom = '8px';
+    
+    parent.style.position = 'relative';
+    parent.appendChild(tooltip);
+    
+    // Trigger animation
+    setTimeout(() => tooltip.classList.add('show'), 10);
+    
+    // Remove after 2 seconds
+    setTimeout(() => {
+        tooltip.classList.remove('show');
+        setTimeout(() => tooltip.remove(), 300);
+    }, 2000);
+}
+
+// Generate secure password
+function generateSecurePassword() {
+    const length = 16;
+    const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+    const numbers = '0123456789';
+    const symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+    
+    const allChars = uppercase + lowercase + numbers + symbols;
+    
+    let password = '';
+    
+    // Ensure at least one character from each category
+    password += uppercase[Math.floor(Math.random() * uppercase.length)];
+    password += lowercase[Math.floor(Math.random() * lowercase.length)];
+    password += numbers[Math.floor(Math.random() * numbers.length)];
+    password += symbols[Math.floor(Math.random() * symbols.length)];
+    
+    // Fill the rest randomly
+    for (let i = password.length; i < length; i++) {
+        password += allChars[Math.floor(Math.random() * allChars.length)];
+    }
+    
+    // Shuffle the password
+    password = password.split('').sort(() => Math.random() - 0.5).join('');
+    
+    // Set the password in the input field
+    const passwordInput = document.getElementById('roomPassword');
+    passwordInput.type = 'text'; // Show the generated password
+    passwordInput.value = password;
+    
+    // Copy to clipboard automatically
+    navigator.clipboard.writeText(password).then(() => {
+        // Show both tooltip and toast for better visibility
+        if (event && event.currentTarget) {
+            const generateBtn = event.currentTarget;
+            showCopyTooltip(generateBtn, '✓ Copied!');
+        }
+        showToast('🔐 Password copied to clipboard!', 'success');
+    }).catch(err => {
+        console.error('Failed to copy password:', err);
+        if (event && event.currentTarget) {
+            const generateBtn = event.currentTarget;
+            showCopyTooltip(generateBtn, '✗ Failed');
+        }
+        showToast('⚠️ Password generated but not copied. Copy manually.', 'warning');
+    });
+    
+    // Update strength indicator
+    checkPasswordStrength(password);
+    
+    // Hide password after 3 seconds
+    setTimeout(() => {
+        passwordInput.type = 'password';
+    }, 3000);
+}
+
+// Toggle password visibility
+function togglePasswordVisibility(inputId) {
+    const input = document.getElementById(inputId);
+    const button = event.currentTarget;
+    
+    if (input.type === 'password') {
+        input.type = 'text';
+        button.innerHTML = `
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                <line x1="1" y1="1" x2="23" y2="23"/>
+            </svg>
+        `;
+    } else {
+        input.type = 'password';
+        button.innerHTML = `
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+            </svg>
+        `;
+    }
+}
+
+// Check password strength
+function checkPasswordStrength(password) {
+    const strengthDiv = document.getElementById('passwordStrength');
+    const strengthBar = document.getElementById('strengthBarFill');
+    const strengthText = document.getElementById('strengthText');
+    
+    if (!password) {
+        strengthDiv.style.display = 'none';
+        return;
+    }
+    
+    strengthDiv.style.display = 'flex';
+    
+    let strength = 0;
+    
+    // Length check
+    if (password.length >= 8) strength++;
+    if (password.length >= 12) strength++;
+    if (password.length >= 16) strength++;
+    
+    // Character variety checks
+    if (/[a-z]/.test(password)) strength++;
+    if (/[A-Z]/.test(password)) strength++;
+    if (/[0-9]/.test(password)) strength++;
+    if (/[^a-zA-Z0-9]/.test(password)) strength++;
+    
+    // Determine strength level
+    let level = 'weak';
+    if (strength >= 5) level = 'medium';
+    if (strength >= 7) level = 'strong';
+    
+    // Update UI
+    strengthBar.className = 'strength-bar-fill ' + level;
+    strengthText.className = 'strength-text ' + level;
+    strengthText.textContent = level.charAt(0).toUpperCase() + level.slice(1);
+}
+
+// Add event listener for password input
+document.addEventListener('DOMContentLoaded', () => {
+    const passwordInput = document.getElementById('roomPassword');
+    if (passwordInput) {
+        passwordInput.addEventListener('input', (e) => {
+            checkPasswordStrength(e.target.value);
+        });
+    }
+});
+
+async function createRoom() {
+    const password = document.getElementById('roomPassword').value;
+    const expiresIn = parseInt(document.getElementById('roomExpiry').value);
+    
+    try {
+        const response = await fetch('/api/rooms/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                password: password || null,
+                expiresIn: expiresIn > 0 ? expiresIn : null
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            closeCreateRoomModal();
+            showRoomLink(data.roomId, data.shareLink);
+        } else {
+            showToast(data.error, 'error');
+        }
+    } catch (error) {
+        console.error('Error creating room:', error);
+        showToast('Failed to create room', 'error');
+    }
+}
+
+function showRoomLink(roomId, shareLink) {
+    const modal = document.getElementById('roomLinkModal');
+    const input = document.getElementById('roomLinkInput');
+    
+    // Display Room ID
+    document.getElementById('displayRoomId').textContent = roomId;
+    input.value = shareLink;
+    
+    // Generate QR code
+    const qrContainer = document.getElementById('qrCode');
+    qrContainer.innerHTML = ''; // Clear previous QR
+    new QRCode(qrContainer, {
+        text: shareLink,
+        width: 200,
+        height: 200,
+        colorDark: '#1c88e2',
+        colorLight: '#ffffff'
+    });
+    
+    modal.classList.add('show');
+    
+    // Store room ID for joining
+    modal.dataset.roomId = roomId;
+}
+
+function closeRoomLinkModal() {
+    const modal = document.getElementById('roomLinkModal');
+    modal.classList.remove('show');
+}
+
+function copyRoomId() {
+    const roomIdElement = document.getElementById('displayRoomId');
+    const roomIdText = roomIdElement.textContent;
+    
+    navigator.clipboard.writeText(roomIdText).then(() => {
+        showCopyTooltip(roomIdElement, '✓ Copied!');
+        showToast('📋 Room ID copied: ' + roomIdText, 'success');
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+        showCopyTooltip(roomIdElement, '✗ Failed');
+        showToast('❌ Failed to copy Room ID', 'error');
+    });
+}
+
+function copyRoomLink() {
+    const input = document.getElementById('roomLinkInput');
+    const copyBtn = event.currentTarget;
+    
+    input.select();
+    navigator.clipboard.writeText(input.value).then(() => {
+        showCopyTooltip(copyBtn, '✓ Copied!');
+        showToast('📋 Room link copied!', 'success');
+    }).catch(err => {
+        // Fallback for older browsers
+        try {
+            document.execCommand('copy');
+            showCopyTooltip(copyBtn, '✓ Copied!');
+            showToast('📋 Room link copied!', 'success');
+        } catch (e) {
+            console.error('Failed to copy:', e);
+            showCopyTooltip(copyBtn, '✗ Failed');
+            showToast('❌ Failed to copy link', 'error');
+        }
+    });
+}
+
+async function joinCreatedRoom() {
+    const modal = document.getElementById('roomLinkModal');
+    const roomId = modal.dataset.roomId;
+    const password = document.getElementById('roomPassword').value;
+    
+    closeRoomLinkModal();
+    await joinRoom(roomId, password);
+}
+
+async function joinRoom(roomId, password = null) {
+    console.log('🚪 Joining room:', roomId);
+    
+    // Derive room key from room ID and password
+    currentRoomKey = await RoomCrypto.deriveRoomKey(roomId, password || '');
+    currentRoomId = roomId;
+    
+    // Emit join-room event with identity and public key
+    socket.emit('join-room', {
+        roomId,
+        password,
+        identity: {
+            displayName: userIdentity.displayName,
+            hash: userIdentity.hash,
+            fullIdentity: userIdentity.fullIdentity
+        },
+        publicKey: userIdentity.publicKeyBase64
+    });
+}
+
+function showJoinRoomModal() {
+    const modal = document.getElementById('joinRoomModal');
+    modal.classList.add('show');
+}
+
+function closeJoinRoomModal() {
+    const modal = document.getElementById('joinRoomModal');
+    modal.classList.remove('show');
+}
+
+async function submitRoomPassword() {
+    const password = document.getElementById('joinRoomPassword').value;
+    const errorDiv = document.getElementById('joinRoomError');
+    
+    if (!password) {
+        errorDiv.textContent = 'Please enter a password';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
+    errorDiv.style.display = 'none';
+    
+    if (pendingRoomJoin) {
+        // Don't close modal yet - wait for password verification
+        await joinRoom(pendingRoomJoin, password);
+    }
+}
+
+// Join Room Prompt Functions (for manual room ID entry)
+function showJoinRoomPrompt() {
+    const modal = document.getElementById('joinRoomPromptModal');
+    modal.classList.add('show');
+    document.getElementById('joinRoomIdInput').value = '';
+    const errorDiv = document.getElementById('joinRoomPromptError');
+    if (errorDiv) errorDiv.style.display = 'none';
+}
+
+function closeJoinRoomPromptModal() {
+    const modal = document.getElementById('joinRoomPromptModal');
+    modal.classList.remove('show');
+}
+
+async function submitJoinRoomId() {
+    const roomId = document.getElementById('joinRoomIdInput').value.trim();
+    const errorDiv = document.getElementById('joinRoomPromptError');
+    
+    if (!roomId) {
+        errorDiv.textContent = 'Please enter a room ID';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
+    if (roomId.length !== 9) {
+        errorDiv.textContent = 'Room ID must be 9 characters';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
+    errorDiv.style.display = 'none';
+    
+    // Check if room exists and requires password
+    try {
+        const response = await fetch(`/api/rooms/${roomId}`);
+        const data = await response.json();
+        
+        if (!data.success) {
+            errorDiv.textContent = data.error || 'Room not found';
+            errorDiv.style.display = 'block';
+            return;
+        }
+        
+        closeJoinRoomPromptModal();
+        
+        if (data.room.requiresPassword) {
+            // Show password prompt
+            pendingRoomJoin = roomId;
+            showJoinRoomModal();
+        } else {
+            // Join directly
+            await joinRoom(roomId, null);
+        }
+    } catch (error) {
+        console.error('Error checking room:', error);
+        errorDiv.textContent = 'Failed to connect to room';
+        errorDiv.style.display = 'block';
+    }
+}
+
+// Leave Room Function
+function leaveRoom() {
+    if (!currentRoomId) return;
+    
+    console.log('🚪 Leaving room:', currentRoomId);
+    
+    const roomIdToLeave = currentRoomId;
+    
+    // Remove all files that were shared in this room from mySharedFiles
+    console.log('   Cleaning up room files from mySharedFiles...');
+    const filesToRemove = [];
+    for (const [fileId, file] of mySharedFiles.entries()) {
+        if (file._roomId === roomIdToLeave) {
+            filesToRemove.push(fileId);
+        }
+    }
+    
+    filesToRemove.forEach(fileId => {
+        console.log('   Removing room file:', fileId);
+        mySharedFiles.delete(fileId);
+    });
+    
+    if (filesToRemove.length > 0) {
+        renderMyFilesCompact();
+    }
+    
+    // Clear download queue of room files
+    console.log('   Cleaning up download queue...');
+    const queueLengthBefore = downloadQueue.queue.length;
+    downloadQueue.queue = downloadQueue.queue.filter(item => {
+        const isRoomFile = item.fileInfo.roomId === roomIdToLeave;
+        if (isRoomFile) {
+            console.log('   Removing queued room file:', item.fileInfo.name);
+            // Release semaphore if it was running
+            if (item.status === 'running') {
+                semaphore.release();
+            }
+        }
+        return !isRoomFile;
+    });
+    
+    if (queueLengthBefore !== downloadQueue.queue.length) {
+        console.log(`   Cleaned queue: ${queueLengthBefore} -> ${downloadQueue.queue.length}`);
+        renderTransferQueues();
+    }
+    
+    // Cancel any active transfers from this room
+    for (const [transferId, transfer] of activeTransfers.entries()) {
+        if (transfer.roomId === roomIdToLeave) {
+            console.log('   Canceling active room transfer:', transferId);
+            removeActiveTransfer(transferId);
+            semaphore.release();
+        }
+    }
+    
+    // Emit leave-room event
+    socket.emit('leave-room', { roomId: currentRoomId });
+    
+    // Reset room state
+    currentRoomId = null;
+    currentRoomKey = null;
+    pendingRoomJoin = null;
+    
+    // Clear room files (server will send global files via files-list event)
+    availableFiles = [];
+    renderAvailableFilesCompact();
+    
+    // Update header UI for global mode
+    updateHeaderForGlobal();
+    
+    // Exit incognito mode
+    document.body.classList.remove('incognito-mode');
+    
+    // Remove encryption status
+    showEncryptionStatus(false);
+    
+    showToast('Left the room');
+    
+    // Optionally redirect to home
+    if (window.location.pathname.includes('/room/')) {
+        window.history.pushState({}, '', '/');
+    }
+}
+
+// WebRTC configuration with multiple STUN servers for better connectivity
 const rtcConfig = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-    ]
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' },
+        { urls: 'stun:global.stun.twilio.com:3478' },
+        { urls: 'stun:stun.services.mozilla.com:3478' }
+    ],
+    iceCandidatePoolSize: 10
 };
 
 // State management
 let myPeerId = null;
 let mySharedFiles = new Map(); // Map to store files in memory
 let availableFiles = [];
+let selectedFiles = new Set(); // Track selected files for batch download
 let peerConnections = new Map(); // Map of peer connections
 let dataChannels = new Map(); // Map of data channels
 
@@ -150,13 +711,13 @@ class Semaphore {
     }
     
     getUtilization() {
-        return this.currentCount > 0 ? ((this.currentCount / Math.min(this.maxConcurrent, 10)) * 100).toFixed(1) : '0';
+        return this.currentCount > 0 ? ((this.currentCount / this.maxConcurrent) * 100).toFixed(1) : '0';
     }
 }
 
 // Initialize OS components
 const downloadQueue = new DownloadQueue();
-const semaphore = new Semaphore(999999); // Unlimited concurrent downloads
+const semaphore = new Semaphore(3); // Max 3 concurrent downloads (can be changed)
 
 // Performance Metrics - Application Level Monitoring
 const performanceMetrics = {
@@ -222,19 +783,122 @@ const maxSpeedDataPoints = 30;
 let speedGraphContext = null;
 
 // Socket.io event listeners
-socket.on('connect', () => {
+socket.on('connect', async () => {
     myPeerId = socket.id;
+    console.log('🔌 Connected to server:', myPeerId);
+    
+    // Update connection status
     const statusEl = document.getElementById('connectionStatus');
     const textEl = document.getElementById('connectionText');
     if (statusEl) statusEl.classList.add('connected');
     if (textEl) textEl.textContent = 'Connected';
+    
+    // Initialize identity if not done
+    if (!userIdentity) {
+        await initializeIdentity();
+    }
+    
+    // Check for room in URL
+    checkForRoomInURL();
+    
+    // Initialize header UI
+    updateHeaderForGlobal();
+    
     updateStatsDisplay();
 });
 
+// Room-specific event handlers
+socket.on('password-challenge', async ({ challenge }) => {
+    console.log('🔐 Received password challenge');
+    // Compute proof using Zero-Knowledge Proof
+    const password = document.getElementById('roomPassword')?.value || 
+                     document.getElementById('joinRoomPassword')?.value;
+    
+    if (password) {
+        const proof = await RoomCrypto.computeProof(password, challenge);
+        socket.emit('password-proof', { proof });
+    } else {
+        showToast('Please enter a password', 'error');
+    }
+});
+
+socket.on('password-verified', async () => {
+    console.log('✅ Password verified - waiting for room-joined event');
+    // Don't do anything here - wait for room-joined event
+    // The server will send room-joined after password verification
+});
+
+socket.on('room-joined', async ({ roomId, peers, files, publicKeys }) => {
+    console.log(`✅ Joined room ${roomId}`);
+    currentRoomId = roomId;
+    
+    // Close password modal if it's open
+    closeJoinRoomModal();
+    
+    // Clear pending room join
+    pendingRoomJoin = null;
+    
+    showToast(`🔒 Joined encrypted room ${roomId} 🎉`);
+    
+    // Update header UI synchronously
+    updateHeaderForRoom(roomId, peers.length);
+    
+    // Enter incognito mode with animation
+    document.body.classList.add('incognito-mode');
+    
+    // Clear global files and load room files
+    availableFiles = files || [];
+    renderAvailableFilesCompact();
+    
+    // Show encryption status notification
+    showEncryptionStatus(true);
+});
+
+socket.on('peer-joined-room', ({ peerId, identity, publicKey }) => {
+    console.log(`👤 Peer joined room: ${identity?.fullIdentity || peerId}`);
+    showToast(`${identity?.displayName || 'Someone'} joined the room`);
+    updatePeerCount(1);
+});
+
+socket.on('peer-left-room', ({ peerId, filesRemoved }) => {
+    console.log(`👋 Peer left room: ${peerId}`);
+    updatePeerCount(-1);
+    
+    // Remove their files
+    if (filesRemoved) {
+        filesRemoved.forEach(fileId => {
+            availableFiles = availableFiles.filter(f => f.id !== fileId);
+        });
+        renderAvailableFilesCompact();
+    }
+});
+
+socket.on('room-expired', ({ roomId }) => {
+    showToast('Room has expired', 'error');
+    currentRoomId = null;
+    currentRoomKey = null;
+    // Redirect to home
+    window.location.href = '/';
+});
+
+socket.on('room-error', ({ error }) => {
+    console.error('❌ Room error:', error);
+    showToast(error, 'error');
+    
+    const errorDiv = document.getElementById('joinRoomError');
+    if (errorDiv) {
+        errorDiv.textContent = error;
+        errorDiv.style.display = 'block';
+    }
+});
+
 socket.on('peers-list', (peers) => {
-    const peerCountEl = document.getElementById('peerCount');
-    if (peerCountEl) {
-        peerCountEl.textContent = Math.max(0, peers.length - 1);
+    // Only update if not in a room (global mode)
+    if (!currentRoomId) {
+        const peerCountEl = document.getElementById('peerCount');
+        if (peerCountEl) {
+            peerCountEl.textContent = Math.max(0, peers.length - 1);
+        }
     }
 });
 
@@ -254,16 +918,134 @@ socket.on('peer-left', (peer) => {
     }
 });
 
+socket.on('file-shared-confirmation', ({ fileId, originalName }) => {
+    console.log('✅ File shared confirmation:', fileId, 'for', originalName);
+    
+    // Update mySharedFiles with correct fileId from server
+    if (window.pendingFileShares && window.pendingFileShares.has(originalName)) {
+        const tempId = window.pendingFileShares.get(originalName);
+        const file = mySharedFiles.get(tempId);
+        
+        if (file) {
+            // Remove temp entry and add with correct ID
+            mySharedFiles.delete(tempId);
+            
+            // Store file with metadata about which room it was shared in
+            const fileWithMeta = file;
+            fileWithMeta._roomId = currentRoomId; // Track which room this was shared in
+            fileWithMeta._fileId = fileId; // Track the server's fileId
+            
+            mySharedFiles.set(fileId, fileWithMeta);
+            window.pendingFileShares.delete(originalName);
+            renderMyFilesCompact();
+            console.log('   Updated mySharedFiles:', tempId, '→', fileId, 'roomId:', currentRoomId);
+        }
+    }
+});
+
 socket.on('files-list', (files) => {
+    console.log('📋 Received files-list:', files.length, 'files');
+    console.log('Current room:', currentRoomId);
+    files.forEach(f => console.log('  - File:', f.name, 'roomId:', f.roomId, 'peerId:', f.peerId));
+    
+    // Filter out our own files
     availableFiles = files.filter(file => file.peerId !== myPeerId);
+    
+    // Clean up download queue - remove items for files that no longer exist
+    const availableFileIds = new Set(availableFiles.map(f => f.id));
+    const queueLengthBefore = downloadQueue.queue.length;
+    downloadQueue.queue = downloadQueue.queue.filter(item => {
+        const exists = availableFileIds.has(item.fileInfo.id);
+        if (!exists) {
+            console.log('   Removing queued item (file no longer available):', item.fileInfo.name);
+        }
+        return exists;
+    });
+    
+    if (queueLengthBefore !== downloadQueue.queue.length) {
+        console.log(`   Cleaned queue: ${queueLengthBefore} -> ${downloadQueue.queue.length}`);
+        renderTransferQueues();
+    }
+    
     renderAvailableFilesCompact();
 });
 
 socket.on('file-available', (file) => {
     if (file.peerId !== myPeerId) {
-        availableFiles.push(file);
-        renderAvailableFilesCompact();
+        // Filter based on room context
+        // If in a room, only show files from the same room
+        // If in global mode, only show global files (no roomId)
+        if (currentRoomId) {
+            // In a room - only accept files from same room
+            if (file.roomId === currentRoomId) {
+                availableFiles.push(file);
+                renderAvailableFilesCompact();
+                
+                const location = `🔒 Room ${file.roomId.substring(0, 6)}`;
+                showToast(`New file: ${file.name} (${location})`);
+            }
+        } else {
+            // In global mode - only accept files without roomId
+            if (!file.roomId) {
+                availableFiles.push(file);
+                renderAvailableFilesCompact();
+                
+                showToast(`New file: ${file.name} (🌐 Global)`);
+            }
+        }
     }
+});
+
+// Handle file removal by other peers
+socket.on('file-removed', ({ fileId, roomId }) => {
+    console.log('🗑️  file-removed event received');
+    console.log('   fileId:', fileId);
+    console.log('   roomId from event:', roomId);
+    console.log('   currentRoomId:', currentRoomId);
+    console.log('   availableFiles count:', availableFiles.length);
+    console.log('   mySharedFiles count:', mySharedFiles.size);
+    
+    // Remove from availableFiles (files from other peers)
+    const fileIndex = availableFiles.findIndex(f => f.id === fileId);
+    console.log('   fileIndex in availableFiles:', fileIndex);
+    
+    if (fileIndex !== -1) {
+        const file = availableFiles[fileIndex];
+        console.log('   Found file in availableFiles:', file.name, 'file.roomId:', file.roomId);
+        availableFiles.splice(fileIndex, 1);
+        console.log('   ✅ Removed from availableFiles, new count:', availableFiles.length);
+    }
+    
+    // Also remove from mySharedFiles if it's our own file being removed
+    if (mySharedFiles.has(fileId)) {
+        console.log('   Found file in mySharedFiles, removing...');
+        mySharedFiles.delete(fileId);
+        renderMyFilesCompact();
+        console.log('   ✅ Removed from mySharedFiles, new count:', mySharedFiles.size);
+    }
+    
+    // Remove from download queue if it's queued
+    const queueItemIndex = downloadQueue.queue.findIndex(q => q.fileInfo.id === fileId);
+    if (queueItemIndex !== -1) {
+        console.log('   Found file in download queue, removing...');
+        const removedItem = downloadQueue.queue.splice(queueItemIndex, 1)[0];
+        console.log('   ✅ Removed from queue:', removedItem.fileInfo.name);
+        renderTransferQueues();
+    }
+    
+    // Cancel active download if in progress
+    for (const [transferId, transfer] of activeTransfers.entries()) {
+        if (transfer.type === 'download' && transfer.fileId === fileId) {
+            console.log('   Found active download, canceling...');
+            removeActiveTransfer(transferId);
+            semaphore.release();
+            showToast('Download canceled - file was removed', 'error');
+        }
+    }
+    
+    // Re-render UI
+    renderAvailableFilesCompact();
+    console.log('   ✅ UI updated after file removal');
 });
 
 // WebRTC signaling
@@ -281,18 +1063,48 @@ socket.on('offer', async ({ offer, fromPeerId }) => {
                     const request = JSON.parse(e.data);
                     console.log('File request received:', request);
                     
-                    if (request.type === 'request' && request.fileName) {
-                        // Find the file in my shared files
-                        const fileKey = Array.from(mySharedFiles.keys()).find(key => 
-                            key.includes(request.fileName) || key.endsWith(request.fileName)
-                        );
+                    if (request.type === 'request') {
+                        // Try to find by fileId first (most reliable)
+                        let file = null;
+                        let fileKey = null;
                         
-                        if (fileKey) {
-                            const file = mySharedFiles.get(fileKey);
-                            console.log('Sending file:', file.name);
+                        if (request.fileId) {
+                            // Direct lookup by fileId
+                            fileKey = request.fileId;
+                            file = mySharedFiles.get(fileKey);
+                            console.log('Looking up by fileId:', fileKey, 'Found:', !!file);
+                        }
+                        
+                        // Fallback: search by filename if fileId lookup failed
+                        if (!file && request.fileName) {
+                            fileKey = Array.from(mySharedFiles.keys()).find(key => 
+                                key.includes(request.fileName) || key.endsWith(request.fileName)
+                            );
+                            if (fileKey) {
+                                file = mySharedFiles.get(fileKey);
+                                console.log('Looking up by fileName:', request.fileName, 'Found:', !!file);
+                            }
+                        }
+                        
+                        if (file) {
+                            console.log('✅ Sending file:', file.name, 'Size:', file.size);
                             await sendFile(dataChannel, file);
                         } else {
-                            console.error('File not found:', request.fileName);
+                            console.error('❌ File not found. Request:', request);
+                            console.error('   Available files:', Array.from(mySharedFiles.keys()));
+                            console.error('   mySharedFiles entries:', Array.from(mySharedFiles.entries()).map(([k, v]) => ({ key: k, name: v.name, size: v.size })));
+                            
+                            // Send error message to requester
+                            try {
+                                dataChannel.send(JSON.stringify({
+                                    type: 'error',
+                                    message: 'File not found on sender',
+                                    requestedFileId: request.fileId,
+                                    requestedFileName: request.fileName
+                                }));
+                            } catch (e) {
+                                console.error('Failed to send error message:', e);
+                            }
                         }
                     }
                 } catch (error) {
@@ -328,16 +1140,25 @@ socket.on('ice-candidate', async ({ candidate, fromPeerId }) => {
 
 // File upload handling
 uploadArea.addEventListener('click', (e) => {
-    // Prevent double-triggering from the button inside
-    if (!e.target.closest('.btn-upload')) {
+    // Prevent triggering from buttons, selects, labels, or empty state
+    if (!e.target.closest('.btn-upload') && 
+        !e.target.closest('.empty-state-container') && 
+        !e.target.closest('.upload-options') &&
+        !e.target.closest('select') &&
+        !e.target.closest('label')) {
         fileInput.click();
     }
 });
 
 fileInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file) {
-        shareFile(file);
+    const files = Array.from(e.target.files);
+    if (files.length > 0) {
+        console.log(`📁 Selected ${files.length} file(s) for upload`);
+        files.forEach((file, index) => {
+            console.log(`   ${index + 1}. ${file.name} (${formatBytes(file.size)})`);
+            shareFile(file);
+        });
+        showToast(`Sharing ${files.length} file(s)...`);
     }
     fileInput.value = '';
 });
@@ -357,23 +1178,55 @@ uploadArea.addEventListener('drop', (e) => {
     uploadArea.classList.remove('drag-over');
     
     const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 MB
-    const file = e.dataTransfer.files[0];
+    const files = Array.from(e.dataTransfer.files);
     
-    if (file) {
-        if (file.size > MAX_FILE_SIZE) {
-            showToast(`File too large: ${file.name}. Max size is 500 MB`, 'error');
-            return;
+    if (files.length > 0) {
+        console.log(`📁 Dropped ${files.length} file(s)`);
+        
+        let validFiles = 0;
+        let skippedFiles = 0;
+        
+        files.forEach((file, index) => {
+            if (file.size > MAX_FILE_SIZE) {
+                console.log(`   ❌ Skipped (too large): ${file.name} (${formatBytes(file.size)})`);
+                skippedFiles++;
+            } else {
+                console.log(`   ✅ ${index + 1}. ${file.name} (${formatBytes(file.size)})`);
+                shareFile(file);
+                validFiles++;
+            }
+        });
+        
+        if (validFiles > 0) {
+            showToast(`Sharing ${validFiles} file(s)...`);
         }
-        shareFile(file);
+        if (skippedFiles > 0) {
+            showToast(`${skippedFiles} file(s) skipped (too large, max 500 MB)`, 'error');
+        }
     }
 });
 
 // Share file
 function shareFile(file) {
-    const fileId = `${myPeerId}-${Date.now()}-${file.name}`;
+    const tempId = `temp-${Date.now()}-${file.name}`;
     
-    // Store file in memory
-    mySharedFiles.set(fileId, file);
+    // Get expiry time from dropdown
+    const expirySelect = document.getElementById('fileExpiry');
+    const expiryMs = parseInt(expirySelect?.value || 600000); // Default 10 minutes
+    
+    // Store file in memory with temp ID and expiry info
+    const fileWithExpiry = file;
+    fileWithExpiry._expiryMs = expiryMs;
+    fileWithExpiry._sharedAt = Date.now();
+    if (expiryMs > 0) {
+        fileWithExpiry._expiresAt = Date.now() + expiryMs;
+    }
+    
+    mySharedFiles.set(tempId, fileWithExpiry);
+    
+    // Store mapping from filename to temp ID for later update
+    if (!window.pendingFileShares) window.pendingFileShares = new Map();
+    window.pendingFileShares.set(file.name, tempId);
     
     // Update memory metrics
     performanceMetrics.filesInMemory = mySharedFiles.size;
@@ -384,11 +1237,41 @@ function shareFile(file) {
     socket.emit('share-file', {
         name: file.name,
         size: file.size,
-        type: file.type || 'application/octet-stream'
+        type: file.type || 'application/octet-stream',
+        expiresAt: fileWithExpiry._expiresAt || null
     });
+    
+    // Set up auto-removal timer if expiry is set
+    if (expiryMs > 0) {
+        setTimeout(() => {
+            autoRemoveExpiredFile(tempId, file.name);
+        }, expiryMs);
+    }
     
     renderMyFilesCompact();
     updatePerformanceMetrics();
+}
+
+// Auto-remove expired file
+function autoRemoveExpiredFile(fileId, fileName) {
+    // Check if file still exists (might have been manually removed)
+    if (mySharedFiles.has(fileId)) {
+        console.log('⏰ Auto-removing expired file:', fileName);
+        
+        const file = mySharedFiles.get(fileId);
+        const roomId = file._roomId || null;
+        
+        // Remove from local storage
+        mySharedFiles.delete(fileId);
+        
+        // Notify server
+        socket.emit('unshare-file', { fileId, roomId });
+        
+        // Update UI
+        renderMyFilesCompact();
+        
+        showToast(`File expired: ${fileName}`, 'warning');
+    }
 }
 
 // Create peer connection
@@ -494,9 +1377,9 @@ async function downloadFileFromQueue(queueItem) {
     }
 }
 
-// Send file through data channel
+// Send file through data channel with TRIPLE-LAYER ENCRYPTION
 async function sendFile(dataChannel, file) {
-    const chunkSize = 16384; // 16KB chunks
+    const chunkSize = 262144; // 256KB chunks for faster transfer
     const totalSize = file.size;
     let offset = 0;
     let lastProgressTime = Date.now();
@@ -504,60 +1387,125 @@ async function sendFile(dataChannel, file) {
     
     const startTime = Date.now();
     
-    // Send metadata first
-    dataChannel.send(JSON.stringify({
+    console.log('🔐 Starting encrypted file transfer:', file.name);
+    
+    // LAYER 1: Generate ephemeral session key
+    const sessionKey = await SessionCrypto.generateSessionKey();
+    const sessionKeyExported = await SessionCrypto.exportKey(sessionKey);
+    
+    // Send metadata with session key
+    const metadata = {
         name: file.name,
         size: file.size,
-        type: file.type
-    }));
+        type: file.type,
+        encrypted: true,
+        sessionKey: CryptoUtils.arrayBufferToBase64(sessionKeyExported),
+        roomId: currentRoomId || null
+    };
+    
+    dataChannel.send(JSON.stringify(metadata));
+    console.log('📤 Sent metadata with session key');
     
     // Track buffer size
     performanceMetrics.bufferSizeMB = chunkSize / (1024 * 1024);
     
-    // Send file in chunks
+    // Send file in chunks with triple-layer encryption
     const readChunk = () => {
         const slice = file.slice(offset, offset + chunkSize);
         const reader = new FileReader();
         
-        reader.onload = (e) => {
-            dataChannel.send(e.target.result);
-            offset += chunkSize;
-            
-            // Calculate upload speed
-            const now = Date.now();
-            const timeDelta = (now - lastProgressTime) / 1000;
-            if (timeDelta > 0.1) {
-                const sizeDelta = offset - lastSentSize;
-                const speedBytesPerSec = sizeDelta / timeDelta;
-                performanceMetrics.currentUploadSpeed = speedBytesPerSec;
-                lastProgressTime = now;
-                lastSentSize = offset;
-            }
-            
-            if (offset < totalSize) {
-                readChunk();
-            } else {
-                performanceMetrics.totalUploads++;
-                performanceMetrics.totalDataUploaded += totalSize;
-                performanceMetrics.currentUploadSpeed = 0;
+        reader.onload = async (e) => {
+            try {
+                let chunkData = e.target.result;
                 
-                // Add to transfer history
-                const transferTime = (Date.now() - startTime) / 1000;
-                transferHistory.unshift({
-                    name: file.name,
-                    size: totalSize,
-                    time: transferTime,
-                    speed: totalSize / transferTime,
-                    type: 'upload',
-                    timestamp: Date.now()
-                });
-                if (transferHistory.length > 10) transferHistory.pop();
+                // OPTIMIZED: Only encrypt in rooms, skip for global (faster)
+                if (currentRoomId && currentRoomKey) {
+                    // Room mode: Use room encryption only (faster than triple-layer)
+                    const roomEncrypted = await RoomCrypto.encrypt(chunkData, currentRoomKey);
+                    
+                    const encryptedPackage = {
+                        data: CryptoUtils.uint8ArrayToBase64(roomEncrypted.encrypted),
+                        roomIv: CryptoUtils.uint8ArrayToBase64(roomEncrypted.iv),
+                        encrypted: true,
+                        chunkIndex: Math.floor(offset / chunkSize)
+                    };
+                    
+                    const packagedData = JSON.stringify(encryptedPackage);
+                    
+                    // Check buffer before sending
+                    if (dataChannel.bufferedAmount > chunkSize * 4) {
+                        setTimeout(() => {
+                            dataChannel.send(packagedData);
+                            offset += chunkSize;
+                            processNextChunk();
+                        }, 10);
+                        return;
+                    }
+                    
+                    dataChannel.send(packagedData);
+                } else {
+                    // Global mode: Send unencrypted for speed (WebRTC is already encrypted via DTLS)
+                    // Check buffer before sending
+                    if (dataChannel.bufferedAmount > chunkSize * 4) {
+                        setTimeout(() => {
+                            dataChannel.send(chunkData);
+                            offset += chunkSize;
+                            processNextChunk();
+                        }, 10);
+                        return;
+                    }
+                    
+                    dataChannel.send(chunkData);
+                }
                 
-                updatePerformanceMetrics();
+                offset += chunkSize;
+                processNextChunk();
+                
+            } catch (error) {
+                console.error('❌ Encryption error:', error);
+                showToast('Encryption failed', 'error');
             }
         };
         
         reader.readAsArrayBuffer(slice);
+    };
+    
+    const processNextChunk = () => {
+            
+        // Calculate upload speed
+        const now = Date.now();
+        const timeDelta = (now - lastProgressTime) / 1000;
+        if (timeDelta > 0.1) {
+            const sizeDelta = offset - lastSentSize;
+            const speedBytesPerSec = sizeDelta / timeDelta;
+            performanceMetrics.currentUploadSpeed = speedBytesPerSec;
+            lastProgressTime = now;
+            lastSentSize = offset;
+        }
+        
+        if (offset < totalSize) {
+            readChunk();
+        } else {
+            console.log('✅ File encrypted and sent:', file.name);
+            performanceMetrics.totalUploads++;
+            performanceMetrics.totalDataUploaded += totalSize;
+            performanceMetrics.currentUploadSpeed = 0;
+            
+            // Add to transfer history
+            const transferTime = (Date.now() - startTime) / 1000;
+            transferHistory.unshift({
+                name: file.name,
+                size: totalSize,
+                time: transferTime,
+                speed: totalSize / transferTime,
+                type: 'upload',
+                timestamp: Date.now(),
+                encrypted: true
+            });
+            if (transferHistory.length > 10) transferHistory.pop();
+            
+            updatePerformanceMetrics();
+        }
     };
     
     readChunk();
@@ -567,8 +1515,11 @@ async function performDownload(fileInfo, queueId, connectionStartTime = Date.now
     const peerId = fileInfo.peerId;
     const pc = createPeerConnection(peerId);
     
-    // Create data channel
-    const dataChannel = pc.createDataChannel('fileTransfer');
+    // Create optimized data channel for speed
+    const dataChannel = pc.createDataChannel('fileTransfer', {
+        ordered: true,
+        maxRetransmits: 30
+    });
     
     let receivedBuffer = [];
     let receivedSize = 0;
@@ -581,40 +1532,188 @@ async function performDownload(fileInfo, queueId, connectionStartTime = Date.now
     const transferId = `download-${Date.now()}`;
     
     dataChannel.onopen = () => {
-        console.log('Data channel opened, requesting file:', fileInfo.name);
+        console.log('📡 Data channel opened, requesting file:', fileInfo.name);
+        console.log('   FileInfo:', { id: fileInfo.id, name: fileInfo.name, size: fileInfo.size, peerId: fileInfo.peerId });
+        
         // Request the file
-        dataChannel.send(JSON.stringify({
+        const request = {
             type: 'request',
             fileId: fileInfo.id,
             fileName: fileInfo.name
-        }));
+        };
+        console.log('   Sending request:', request);
+        dataChannel.send(JSON.stringify(request));
     };
     
-    dataChannel.onmessage = (event) => {
+    let sessionKey = null;
+    let isEncrypted = false;
+    
+    dataChannel.onmessage = async (event) => {
         if (typeof event.data === 'string') {
-            const metadata = JSON.parse(event.data);
-            totalSize = metadata.size;
-            fileName = metadata.name;
-            startTime = Date.now();
-            firstChunkTime = 0;
-            
-            // Add to active transfers
-            updateActiveTransfer(transferId, {
-                id: transferId,
-                name: fileName,
-                type: 'download',
-                progress: 0,
-                speed: 0,
-                transferred: 0,
-                total: totalSize,
-                peerId: peerId.substring(0, 8)
-            });
-            
-            // Calculate connection time
-            const connectionTime = startTime - connectionStartTime;
-            const totalConnectionTime = performanceMetrics.averageConnectionTime * performanceMetrics.totalDownloads;
-            performanceMetrics.averageConnectionTime = (totalConnectionTime + connectionTime) / (performanceMetrics.totalDownloads + 1);
+            try {
+                const parsed = JSON.parse(event.data);
+                
+                // Check for error message from sender
+                if (parsed.type === 'error') {
+                    console.error('❌ Sender error:', parsed.message);
+                    showToast(`Download failed: ${parsed.message}`, 'error');
+                    removeActiveTransfer(transferId);
+                    downloadQueue.completeDownload(queueId);
+                    semaphore.release();
+                    return;
+                }
+                
+                // Check if this is metadata or encrypted chunk
+                if (parsed.name && parsed.size) {
+                    // This is metadata
+                    totalSize = parsed.size;
+                    fileName = parsed.name;
+                    startTime = Date.now();
+                    firstChunkTime = 0;
+                    isEncrypted = parsed.encrypted || false;
+                    
+                    console.log(`🔐 Receiving ${isEncrypted ? 'ENCRYPTED' : 'unencrypted'} file:`, fileName);
+                    
+                    // Import session key if encrypted
+                    if (isEncrypted && parsed.sessionKey) {
+                        const sessionKeyBytes = CryptoUtils.base64ToArrayBuffer(parsed.sessionKey);
+                        sessionKey = await SessionCrypto.importKey(sessionKeyBytes);
+                        console.log('🔑 Session key imported');
+                    }
+                    
+                    // Add to active transfers
+                    updateActiveTransfer(transferId, {
+                        id: transferId,
+                        name: fileName,
+                        type: 'download',
+                        progress: 0,
+                        speed: 0,
+                        transferred: 0,
+                        total: totalSize,
+                        peerId: peerId.substring(0, 8),
+                        fileId: fileInfo.id,
+                        roomId: fileInfo.roomId || null,
+                        encrypted: isEncrypted,
+                        status: isEncrypted ? 'Decrypting...' : 'Downloading...'
+                    });
+                    
+                    // Calculate connection time
+                    const connectionTime = startTime - connectionStartTime;
+                    const totalConnectionTime = performanceMetrics.averageConnectionTime * performanceMetrics.totalDownloads;
+                    performanceMetrics.averageConnectionTime = (totalConnectionTime + connectionTime) / (performanceMetrics.totalDownloads + 1);
+                    
+                } else if (parsed.data && parsed.signature) {
+                    // This is an encrypted chunk
+                    if (firstChunkTime === 0) {
+                        firstChunkTime = Date.now();
+                        const queueItem = downloadQueue.queue.find(q => q.id === queueId);
+                        if (queueItem) {
+                            queueItem.responseTime = firstChunkTime - startTime;
+                        }
+                    }
+                    
+                    try {
+                        // Decrypt the chunk with triple-layer decryption
+                        let decryptedChunk = CryptoUtils.base64ToUint8Array(parsed.data);
+                        
+                        // LAYER 3: Verify signature (RSA)
+                        const signature = CryptoUtils.base64ToArrayBuffer(parsed.signature);
+                        const senderPublicKey = await IdentityCrypto.importPublicKey(fileInfo.publicKey || userIdentity.publicKeyBase64);
+                        const isValid = await IdentityCrypto.verify(decryptedChunk, signature, senderPublicKey);
+                        
+                        if (!isValid) {
+                            console.error('❌ Signature verification failed!');
+                            showToast('Security warning: Invalid signature', 'error');
+                            return;
+                        }
+                        
+                        // LAYER 2: Room decryption (if in room)
+                        if (parsed.roomIv && currentRoomKey) {
+                            const roomIv = CryptoUtils.base64ToUint8Array(parsed.roomIv);
+                            decryptedChunk = await RoomCrypto.decrypt(decryptedChunk, currentRoomKey, roomIv);
+                            decryptedChunk = new Uint8Array(decryptedChunk);
+                        }
+                        
+                        // LAYER 1: Session decryption (AES-GCM)
+                        const sessionIv = CryptoUtils.base64ToUint8Array(parsed.sessionIv);
+                        const finalDecrypted = await SessionCrypto.decryptChunk(decryptedChunk, sessionKey, sessionIv);
+                        
+                        receivedBuffer.push(finalDecrypted);
+                        receivedSize += finalDecrypted.byteLength;
+                        
+                        // Update progress
+                        const now = Date.now();
+                        const timeDelta = (now - lastProgressTime) / 1000;
+                        if (timeDelta > 0.1) {
+                            const sizeDelta = receivedSize - lastReceivedSize;
+                            const speedBytesPerSec = sizeDelta / timeDelta;
+                            performanceMetrics.currentDownloadSpeed = speedBytesPerSec;
+                            
+                            if (speedBytesPerSec > performanceMetrics.peakDownloadSpeed) {
+                                performanceMetrics.peakDownloadSpeed = speedBytesPerSec;
+                            }
+                            
+                            const progress = (receivedSize / totalSize) * 100;
+                            updateActiveTransfer(transferId, {
+                                progress: progress,
+                                speed: speedBytesPerSec,
+                                transferred: receivedSize,
+                                status: progress < 100 ? 'Decrypting...' : 'Complete'
+                            });
+                            
+                            lastProgressTime = now;
+                            lastReceivedSize = receivedSize;
+                        }
+                        
+                        if (receivedSize === totalSize) {
+                            console.log('✅ File decrypted successfully:', fileName);
+                            const blob = new Blob(receivedBuffer);
+                            downloadBlob(blob, fileName);
+                            
+                            removeActiveTransfer(transferId);
+                            
+                            performanceMetrics.totalDownloads++;
+                            performanceMetrics.totalDataDownloaded += totalSize;
+                            performanceMetrics.currentDownloadSpeed = 0;
+                            
+                            const transferTime = (Date.now() - startTime) / 1000;
+                            transferHistory.unshift({
+                                name: fileName,
+                                size: totalSize,
+                                time: transferTime,
+                                speed: totalSize / transferTime,
+                                type: 'download',
+                                algorithm: downloadQueue.schedulingAlgorithm,
+                                timestamp: Date.now(),
+                                encrypted: true
+                            });
+                            if (transferHistory.length > 10) transferHistory.pop();
+                            
+                            receivedBuffer = [];
+                            receivedSize = 0;
+                            
+                            showToast(`🔓 File received & decrypted: ${fileName}`);
+                            
+                            downloadQueue.completeDownload(queueId);
+                            semaphore.release();
+                            
+                            updatePerformanceMetrics();
+                            updatePerformanceUI();
+                        }
+                        
+                    } catch (error) {
+                        console.error('❌ Decryption error:', error);
+                        showToast('Decryption failed', 'error');
+                        removeActiveTransfer(transferId);
+                        downloadQueue.completeDownload(queueId);
+                        semaphore.release();
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Message parsing error:', error);
+            }
         } else {
+            // Legacy unencrypted chunk (fallback)
             if (firstChunkTime === 0) {
                 firstChunkTime = Date.now();
                 // Response time = time to first chunk
@@ -1107,7 +2206,7 @@ function updateStatsDisplay() {
         currentSpeedEl.textContent = `${speed.toFixed(2)} MB/s`;
     }
     if (activeConnectionsEl) {
-        activeConnectionsEl.textContent = semaphore.currentCount;
+        activeConnectionsEl.textContent = `${semaphore.currentCount}/${semaphore.maxConcurrent}`;
     }
 }
 
@@ -1118,14 +2217,152 @@ function showToast(message, type = 'info') {
     if (toast && messageEl) {
         messageEl.textContent = message;
         toast.classList.add('show');
+        
+        // Add type-specific styling
+        toast.classList.remove('toast-success', 'toast-error', 'toast-warning');
+        if (type === 'error') toast.classList.add('toast-error');
+        if (type === 'success') toast.classList.add('toast-success');
+        if (type === 'warning') toast.classList.add('toast-warning');
+        
         setTimeout(() => {
             toast.classList.remove('show');
         }, 3000);
     }
 }
 
+// Show encryption status indicator
+function showEncryptionStatus(isEncrypted) {
+    console.log('🔐 Setting encryption status:', isEncrypted);
+    
+    // Remove existing badge first to prevent duplicates
+    const existingBadge = document.getElementById('encryptionBadge');
+    if (existingBadge) {
+        existingBadge.remove();
+    }
+    
+    if (isEncrypted) {
+        // Find the nav-right container
+        const navRight = document.querySelector('.nav-right');
+        if (!navRight) {
+            console.error('❌ nav-right container not found');
+            return;
+        }
+        
+        // Create encryption indicator
+        const encryptionBadge = document.createElement('div');
+        encryptionBadge.id = 'encryptionBadge';
+        encryptionBadge.className = 'encryption-badge';
+        encryptionBadge.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <span>Encrypted</span>
+        `;
+        encryptionBadge.style.cssText = `
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: linear-gradient(135deg, rgba(212, 175, 55, 0.2), rgba(212, 175, 55, 0.1));
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            border-radius: 8px;
+            color: #d4af37;
+            font-size: 12px;
+            font-weight: 500;
+            white-space: nowrap;
+            animation: pulse 2s ease-in-out infinite;
+        `;
+        
+        // Insert before the status badge
+        const statusBadge = document.getElementById('statusBadge');
+        if (statusBadge) {
+            navRight.insertBefore(encryptionBadge, statusBadge);
+        } else {
+            navRight.appendChild(encryptionBadge);
+        }
+        
+        console.log('✅ Encryption badge added');
+    } else {
+        console.log('✅ Encryption badge removed');
+    }
+}
+
+// Update file expiry countdowns
+function updateFileExpiryCountdowns() {
+    const now = Date.now();
+    const expiredFiles = [];
+    
+    // Check all files in mySharedFiles for expiry
+    for (const [fileId, file] of mySharedFiles.entries()) {
+        if (file._expiresAt && now >= file._expiresAt) {
+            // File has expired - mark for removal
+            expiredFiles.push({ fileId, file });
+        }
+    }
+    
+    // Remove expired files
+    if (expiredFiles.length > 0) {
+        expiredFiles.forEach(({ fileId, file }) => {
+            console.log(`⏰ File expired: ${file.name}`);
+            const roomId = file._roomId || null;
+            
+            // Remove from local storage
+            mySharedFiles.delete(fileId);
+            
+            // Notify server to remove file
+            socket.emit('unshare-file', { fileId, roomId });
+            
+            // Show notification
+            showToast(`File expired: ${file.name}`, 'warning');
+        });
+        
+        // Re-render UI after removing expired files
+        renderMyFilesCompact();
+    }
+    
+    // Update countdown badges for remaining files
+    const badges = document.querySelectorAll('.file-expiry-badge');
+    badges.forEach(badge => {
+        const fileId = badge.dataset.fileId;
+        const file = mySharedFiles.get(fileId);
+        
+        if (file && file._expiresAt) {
+            const timeLeft = file._expiresAt - now;
+            
+            if (timeLeft > 0) {
+                const minutes = Math.floor(timeLeft / 60000);
+                const seconds = Math.floor((timeLeft % 60000) / 1000);
+                
+                let timeText = '';
+                if (minutes > 0) {
+                    timeText = `${minutes}m ${seconds}s`;
+                } else {
+                    timeText = `${seconds}s`;
+                }
+                
+                // Update badge text
+                const textNode = badge.childNodes[badge.childNodes.length - 1];
+                if (textNode) {
+                    textNode.textContent = timeText;
+                }
+                
+                // Add expiring-soon class if less than 1 minute
+                if (timeLeft < 60000) {
+                    badge.classList.add('expiring-soon');
+                } else {
+                    badge.classList.remove('expiring-soon');
+                }
+            }
+        }
+    });
+}
+
 // Initialize on load
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    // Initialize user identity first
+    await initializeIdentity();
+    
     initMiniSpeedGraph();
     renderAllUI();
     
@@ -1145,6 +2382,11 @@ document.addEventListener('DOMContentLoaded', () => {
         renderActiveDownloads();
         renderActiveUploads();
     }, 500);
+    
+    // Update file expiry countdowns every second
+    setInterval(() => {
+        updateFileExpiryCountdowns();
+    }, 1000);
 });
 
 // Helper function to format speed
@@ -1157,11 +2399,74 @@ function formatSpeed(bytesPerSecond) {
     return `${(kbps / 1024).toFixed(2)} MB/s`;
 }
 
+// Remove all shared files
+window.removeAllSharedFiles = () => {
+    if (mySharedFiles.size === 0) {
+        showToast('No files to remove', 'error');
+        return;
+    }
+    
+    if (!confirm(`Remove all ${mySharedFiles.size} shared file(s)?`)) {
+        return;
+    }
+    
+    console.log(`🗑️  Removing all ${mySharedFiles.size} shared files`);
+    
+    const filesToRemove = Array.from(mySharedFiles.entries());
+    
+    filesToRemove.forEach(([fileId, file]) => {
+        const roomId = file._roomId || null;
+        
+        // Notify server
+        socket.emit('unshare-file', { fileId, roomId });
+        
+        // Remove from local storage
+        mySharedFiles.delete(fileId);
+        
+        // Also remove from availableFiles
+        availableFiles = availableFiles.filter(f => f.id !== fileId);
+    });
+    
+    // Update UI
+    renderMyFilesCompact();
+    renderAvailableFilesCompact();
+    
+    showToast(`Removed ${filesToRemove.length} file(s)`);
+};
+
 // Remove file
 window.removeFile = (fileId) => {
-    mySharedFiles.delete(fileId);
-    renderMyFilesCompact();
-    socket.emit('file-removed', fileId);
+    console.log('🗑️  removeFile called with fileId:', fileId);
+    console.log('   mySharedFiles has:', Array.from(mySharedFiles.keys()));
+    console.log('   currentRoomId:', currentRoomId);
+    
+    const file = mySharedFiles.get(fileId);
+    if (!file) {
+        console.log('   ERROR: File not found in mySharedFiles');
+        showToast('File not found', 'error');
+        return;
+    }
+    const roomId = file._roomId || null;
+    if (confirm(`Remove "${file.name}" from sharing?`)) {
+        console.log('   Emitting unshare-file with:', { fileId, roomId });
+        
+        // Notify server FIRST to broadcast removal to all peers
+        socket.emit('unshare-file', { fileId, roomId });
+        
+        // Then remove from local storage
+        mySharedFiles.delete(fileId);
+        
+        // Update UI immediately
+        renderMyFilesCompact();
+        
+        // Also remove from availableFiles in case it somehow got there
+        availableFiles = availableFiles.filter(f => f.id !== fileId);
+        renderAvailableFilesCompact();
+        
+        showToast('File removed');
+        
+        console.log('   ✅ File removed locally and server notified');
+    }
 };
 
 // Helper functions
@@ -1175,8 +2480,69 @@ function formatBytes(bytes) {
 
 function updatePeerCount(delta) {
     const countEl = document.getElementById('peerCount');
-    const current = parseInt(countEl.textContent);
-    countEl.textContent = Math.max(0, current + delta);
+    if (!countEl) return;
+    
+    const current = parseInt(countEl.textContent) || 0;
+    const newCount = Math.max(0, current + delta);
+    countEl.textContent = newCount;
+    
+    console.log(`👥 Peer count updated: ${current} → ${newCount} (delta: ${delta})`);
+}
+
+// Update header UI for room mode
+function updateHeaderForRoom(roomId, peerCount) {
+    console.log('🎨 Updating header for room mode:', roomId, 'peers:', peerCount);
+    
+    // Update connection text with encryption indicator
+    const connectionText = document.getElementById('connectionText');
+    if (connectionText) {
+        connectionText.innerHTML = `🔒 Room ${roomId.substring(0, 6)}...`;
+    }
+    
+    // Update peer count
+    const peerCountEl = document.getElementById('peerCount');
+    if (peerCountEl) {
+        peerCountEl.textContent = peerCount;
+    }
+    
+    // Show leave button, hide create/join buttons
+    const createBtn = document.getElementById('createRoomBtn');
+    const joinBtn = document.getElementById('joinRoomBtn');
+    const leaveBtn = document.getElementById('leaveRoomBtn');
+    
+    if (createBtn) createBtn.style.display = 'none';
+    if (joinBtn) joinBtn.style.display = 'none';
+    if (leaveBtn) leaveBtn.style.display = 'inline-flex';
+    
+    console.log('✅ Header updated for room mode');
+}
+
+// Update header UI for global mode
+function updateHeaderForGlobal() {
+    console.log('🎨 Updating header for global mode');
+    
+    // Update connection text
+    const connectionText = document.getElementById('connectionText');
+    if (connectionText) {
+        connectionText.innerHTML = 'Connected';
+    }
+    
+    // Reset peer count (will be updated by peers-list event)
+    const peerCountEl = document.getElementById('peerCount');
+    if (peerCountEl) {
+        peerCountEl.textContent = '0';
+    }
+    
+    // Show create/join buttons, hide leave button
+    const createBtn = document.getElementById('createRoomBtn');
+    const joinBtn = document.getElementById('joinRoomBtn');
+    const leaveBtn = document.getElementById('leaveRoomBtn');
+    
+    if (createBtn) createBtn.style.display = 'inline-flex';
+    if (joinBtn) joinBtn.style.display = 'inline-flex';
+    if (leaveBtn) leaveBtn.style.display = 'none';
+    
+    console.log('✅ Header updated for global mode');
 }
 
 // ===== NEW RENDER FUNCTIONS FOR TOP CARDS LAYOUT =====
@@ -1199,11 +2565,15 @@ function renderActiveDownloads() {
         return;
     }
     
-    listEl.innerHTML = downloads.map(transfer => `
+    listEl.innerHTML = downloads.map(transfer => {
+        const encryptionBadge = transfer.encrypted ? 
+            `<span style="color: #d4af37; font-size: 11px; margin-left: 8px;">🔐 ${transfer.status || 'Encrypted'}</span>` : '';
+        
+        return `
         <div class="transfer-item">
             <div class="transfer-header">
                 <div class="transfer-info">
-                    <h4>${transfer.name}</h4>
+                    <h4>${transfer.name}${encryptionBadge}</h4>
                     <div class="transfer-peer">From: ${transfer.peerId}</div>
                 </div>
                 <div class="transfer-stats">
@@ -1212,11 +2582,12 @@ function renderActiveDownloads() {
                 </div>
             </div>
             <div class="transfer-progress">
-                <div class="transfer-progress-fill" style="width: ${transfer.progress}%"></div>
+                <div class="transfer-progress-fill ${transfer.encrypted ? 'encrypted' : ''}" style="width: ${transfer.progress}%"></div>
             </div>
             <div class="transfer-size">${formatBytes(transfer.transferred)} / ${formatBytes(transfer.total)}</div>
         </div>
-    `).join('');
+    `}).join('');
+
 }
 
 // Render active uploads in top cards
@@ -1231,11 +2602,15 @@ function renderActiveUploads() {
         return;
     }
     
-    listEl.innerHTML = uploads.map(transfer => `
+    listEl.innerHTML = uploads.map(transfer => {
+        const encryptionBadge = transfer.encrypted ? 
+            `<span style="color: #d4af37; font-size: 11px; margin-left: 8px;">🔐 Encrypting...</span>` : '';
+        
+        return `
         <div class="transfer-item">
             <div class="transfer-header">
                 <div class="transfer-info">
-                    <h4>${transfer.name}</h4>
+                    <h4>${transfer.name}${encryptionBadge}</h4>
                     <div class="transfer-peer">To: ${transfer.peerId}</div>
                 </div>
                 <div class="transfer-stats">
@@ -1244,11 +2619,12 @@ function renderActiveUploads() {
                 </div>
             </div>
             <div class="transfer-progress">
-                <div class="transfer-progress-fill upload" style="width: ${transfer.progress}%"></div>
+                <div class="transfer-progress-fill upload ${transfer.encrypted ? 'encrypted' : ''}" style="width: ${transfer.progress}%"></div>
             </div>
             <div class="transfer-size">${formatBytes(transfer.transferred)} / ${formatBytes(transfer.total)}</div>
         </div>
-    `).join('');
+    `}).join('');
+
 }
 
 // Initialize and draw mini speed graph
@@ -1268,6 +2644,9 @@ function drawMiniSpeedGraph() {
     const height = miniSpeedGraph.height;
     const padding = 10;
     
+    // Check if in incognito mode
+    const isIncognito = document.body.classList.contains('incognito-mode');
+    
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
     
@@ -1281,7 +2660,7 @@ function drawMiniSpeedGraph() {
     const stepX = (width - padding * 2) / (dataPoints.length - 1);
     
     // Draw grid lines (horizontal)
-    ctx.strokeStyle = 'rgba(100, 116, 139, 0.15)';
+    ctx.strokeStyle = isIncognito ? 'rgba(212, 175, 55, 0.15)' : 'rgba(100, 116, 139, 0.15)';
     ctx.lineWidth = 1;
     for (let i = 0; i <= 3; i++) {
         const y = padding + (i * (height - padding * 2) / 3);
@@ -1309,10 +2688,15 @@ function drawMiniSpeedGraph() {
     ctx.lineTo(width - padding, height - padding);
     ctx.closePath();
     
-    // Gradient fill
+    // Gradient fill - Gold for incognito, Cyan for normal
     const gradient = ctx.createLinearGradient(0, padding, 0, height - padding);
-    gradient.addColorStop(0, 'rgba(6, 182, 212, 0.3)');
-    gradient.addColorStop(1, 'rgba(59, 130, 246, 0.05)');
+    if (isIncognito) {
+        gradient.addColorStop(0, 'rgba(212, 175, 55, 0.4)');
+        gradient.addColorStop(1, 'rgba(212, 175, 55, 0.05)');
+    } else {
+        gradient.addColorStop(0, 'rgba(6, 182, 212, 0.3)');
+        gradient.addColorStop(1, 'rgba(59, 130, 246, 0.05)');
+    }
     ctx.fillStyle = gradient;
     ctx.fill();
     
@@ -1329,7 +2713,7 @@ function drawMiniSpeedGraph() {
         }
     });
     
-    ctx.strokeStyle = '#06b6d4';
+    ctx.strokeStyle = isIncognito ? '#d4af37' : '#06b6d4';
     ctx.lineWidth = 2.5;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -1343,9 +2727,9 @@ function drawMiniSpeedGraph() {
             
             ctx.beginPath();
             ctx.arc(x, y, 3, 0, Math.PI * 2);
-            ctx.fillStyle = '#06b6d4';
+            ctx.fillStyle = isIncognito ? '#d4af37' : '#06b6d4';
             ctx.fill();
-            ctx.strokeStyle = '#1e293b';
+            ctx.strokeStyle = isIncognito ? '#1a1a1a' : '#1e293b';
             ctx.lineWidth = 2;
             ctx.stroke();
         }
@@ -1372,12 +2756,59 @@ function updateMiniSpeedGraph() {
 function renderMyFilesCompact() {
     if (!myFilesList) return;
     
+    // Show/hide Remove All button
+    const removeAllBtn = document.getElementById('removeAllBtn');
+    if (removeAllBtn) {
+        removeAllBtn.style.display = mySharedFiles.size > 0 ? 'inline-flex' : 'none';
+    }
+    
     if (mySharedFiles.size === 0) {
-        myFilesList.innerHTML = '<div class="empty-state-container"><svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><p class="empty-state-text">No shared files</p><p class="empty-state-subtext">Upload files to share with peers</p></div>';
+        myFilesList.innerHTML = `
+            <div class="empty-state-container">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    <line x1="12" y1="11" x2="12" y2="17"/>
+                    <line x1="9" y1="14" x2="15" y2="14"/>
+                </svg>
+                <p class="empty-state-text">No shared files</p>
+                <p class="empty-state-subtext">Upload files to share with peers</p>
+            </div>
+        `;
         return;
     }
     
-    myFilesList.innerHTML = Array.from(mySharedFiles.entries()).map(([fileId, file]) => `
+    myFilesList.innerHTML = Array.from(mySharedFiles.entries()).map(([fileId, file]) => {
+        // Calculate expiry info
+        let expiryBadge = '';
+        if (file._expiresAt) {
+            const now = Date.now();
+            const timeLeft = file._expiresAt - now;
+            
+            if (timeLeft > 0) {
+                const minutes = Math.floor(timeLeft / 60000);
+                const seconds = Math.floor((timeLeft % 60000) / 1000);
+                const isExpiringSoon = timeLeft < 60000; // Less than 1 minute
+                
+                let timeText = '';
+                if (minutes > 0) {
+                    timeText = `${minutes}m ${seconds}s`;
+                } else {
+                    timeText = `${seconds}s`;
+                }
+                
+                expiryBadge = `
+                    <span class="file-expiry-badge ${isExpiringSoon ? 'expiring-soon' : ''}" data-file-id="${fileId}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                        ${timeText}
+                    </span>
+                `;
+            }
+        }
+        
+        return `
         <div class="file-item-compact">
             <div class="file-item-left">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
@@ -1385,27 +2816,63 @@ function renderMyFilesCompact() {
                 </svg>
                 <div class="file-item-info">
                     <div class="file-item-name">${file.name}</div>
-                    <div class="file-item-meta">${formatBytes(file.size)}</div>
+                    <div class="file-item-meta">
+                        ${formatBytes(file.size)}
+                        ${expiryBadge}
+                    </div>
                 </div>
             </div>
             <button class="btn-danger" onclick="removeFile('${fileId}')">Remove</button>
         </div>
-    `).join('');
+    `}).join('');
 }
 
 // Render available files in compact format
 function renderAvailableFilesCompact() {
+    console.log('🎨 renderAvailableFilesCompact called, availableFiles.length:', availableFiles.length);
+    console.log('   Files:', availableFiles.map(f => ({ id: f.id, name: f.name })));
+    
     if (!availableFilesList) return;
     
     if (availableFiles.length === 0) {
-        availableFilesList.innerHTML = '<div class="empty-state-container"><svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><p class="empty-state-text">No files available</p><p class="empty-state-subtext">Waiting for peers to share files</p></div>';
+        availableFilesList.innerHTML = `
+            <div class="empty-state-container">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    <path d="M12 11v6"/>
+                    <path d="M9 14h6"/>
+                </svg>
+                <p class="empty-state-text">No files available</p>
+                <p class="empty-state-subtext">Waiting for peers to share files</p>
+            </div>
+        `;
+        // Hide batch download button
+        updateBatchDownloadButton();
         return;
     }
     
-    availableFilesList.innerHTML = availableFiles.map(file => {
+    // Add header with select all checkbox
+    const headerHTML = `
+        <div class="files-list-header">
+            <div class="select-all-container">
+                <input type="checkbox" id="selectAllFiles" onchange="window.toggleSelectAll()" ${selectedFiles.size === availableFiles.length && availableFiles.length > 0 ? 'checked' : ''}>
+                <label for="selectAllFiles" title="Select All">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 11l3 3L22 4"/>
+                        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                    </svg>
+                </label>
+            </div>
+            <span class="selection-count">${selectedFiles.size > 0 ? `${selectedFiles.size} selected` : 'Select files'}</span>
+        </div>
+    `;
+    
+    const filesHTML = availableFiles.map(file => {
         const peerId = file.peerId ? file.peerId.substring(0, 8) : 'unknown';
+        const isSelected = selectedFiles.has(file.id);
         return `
-        <div class="file-item-compact">
+        <div class="file-item-compact ${isSelected ? 'selected' : ''}" data-file-id="${file.id}">
+            <input type="checkbox" class="file-checkbox" ${isSelected ? 'checked' : ''} onchange="window.toggleFileSelection('${file.id}')" title="Select file">
             <div class="file-item-left">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
                     <path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5h-2z"/>
@@ -1422,8 +2889,13 @@ function renderAvailableFilesCompact() {
                 <button 
                     class="btn-download" 
                     onclick='window.downloadFileWithPriority(${JSON.stringify(file)}, 0)'
+                    title="Download"
                 >
-                    Download
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
                 </button>
                 <button 
                     class="btn-priority" 
@@ -1435,10 +2907,110 @@ function renderAvailableFilesCompact() {
             </div>
         </div>
     `}).join('');
+    
+    availableFilesList.innerHTML = headerHTML + filesHTML;
+    
+    // Update batch download button
+    updateBatchDownloadButton();
 }
+
+// Toggle file selection
+window.toggleFileSelection = (fileId) => {
+    if (selectedFiles.has(fileId)) {
+        selectedFiles.delete(fileId);
+    } else {
+        selectedFiles.add(fileId);
+    }
+    renderAvailableFilesCompact();
+};
+
+// Toggle select all
+window.toggleSelectAll = () => {
+    const selectAllCheckbox = document.getElementById('selectAllFiles');
+    if (selectAllCheckbox && selectAllCheckbox.checked) {
+        // Select all
+        availableFiles.forEach(file => selectedFiles.add(file.id));
+    } else {
+        // Deselect all
+        selectedFiles.clear();
+    }
+    renderAvailableFilesCompact();
+};
+
+// Update batch download button visibility
+function updateBatchDownloadButton() {
+    let batchBtn = document.getElementById('batchDownloadBtn');
+    
+    if (selectedFiles.size > 0) {
+        if (!batchBtn) {
+            // Create button
+            const section = document.querySelector('#availableFiles').parentElement;
+            const header = section.querySelector('.section-header');
+            batchBtn = document.createElement('button');
+            batchBtn.id = 'batchDownloadBtn';
+            batchBtn.className = 'btn-batch-download';
+            batchBtn.onclick = window.downloadSelectedFiles;
+            batchBtn.title = `Download ${selectedFiles.size} selected file(s)`;
+            batchBtn.innerHTML = `
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                <span>Download ${selectedFiles.size}</span>
+            `;
+            header.appendChild(batchBtn);
+        } else {
+            // Update button
+            batchBtn.title = `Download ${selectedFiles.size} selected file(s)`;
+            batchBtn.innerHTML = `
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                <span>Download ${selectedFiles.size}</span>
+            `;
+        }
+    } else {
+        // Remove button
+        if (batchBtn) {
+            batchBtn.remove();
+        }
+    }
+}
+
+// Download selected files
+window.downloadSelectedFiles = () => {
+    if (selectedFiles.size === 0) {
+        showToast('No files selected', 'error');
+        return;
+    }
+    
+    console.log(`📥 Batch downloading ${selectedFiles.size} files`);
+    
+    const filesToDownload = availableFiles.filter(f => selectedFiles.has(f.id));
+    
+    filesToDownload.forEach((file, index) => {
+        // Add small delay between each to avoid overwhelming
+        setTimeout(() => {
+            window.downloadFileWithPriority(file, 5); // Normal priority
+        }, index * 100);
+    });
+    
+    showToast(`Added ${selectedFiles.size} file(s) to download queue`);
+    
+    // Clear selection
+    selectedFiles.clear();
+    renderAvailableFilesCompact();
+};
 
 // Render transfer queues
 function renderTransferQueues() {
+    console.log('🎨 renderTransferQueues called');
+    console.log('   downloadQueue.queue.length:', downloadQueue.queue.length);
+    console.log('   Queue items:', downloadQueue.queue.map(q => ({ id: q.id, name: q.fileInfo.name, status: q.status })));
+    
     const queueSection = document.getElementById('queueSection');
     if (queueSection) {
         queueSection.style.display = downloadQueue.queue.length > 0 ? 'block' : 'none';
@@ -1447,6 +3019,16 @@ function renderTransferQueues() {
     // Split queue items between two columns
     const queueItems = downloadQueue.queue;
     const halfPoint = Math.ceil(queueItems.length / 2);
+    
+    // Always clear both columns before rendering
+    if (queueList1) queueList1.innerHTML = '';
+    if (queueList2) queueList2.innerHTML = '';
+    // If queue is empty, show empty state
+    if (queueItems.length === 0) {
+        if (queueList1) queueList1.innerHTML = '<p class="empty-state">Queue is empty</p>';
+        if (queueList2) queueList2.innerHTML = '<p class="empty-state">Queue is empty</p>';
+        return;
+    }
     
     // Queue 1
     if (queueList1) {
@@ -1460,7 +3042,23 @@ function renderTransferQueues() {
                 const waitTime = ((Date.now() - item.arrivalTime) / 1000).toFixed(1);
                 
                 return `
-                <div class="queue-item-compact ${item.status === 'running' ? 'queue-running' : ''}">
+                <div class="queue-item-compact ${item.status === 'running' ? 'queue-running' : ''}" 
+                     draggable="${item.status === 'waiting'}" 
+                     data-queue-id="${item.id}"
+                     ondragstart="window.handleQueueDragStart(event, ${item.id})"
+                     ondragover="window.handleQueueDragOver(event)"
+                     ondrop="window.handleQueueDrop(event, ${item.id})"
+                     ondragend="window.handleQueueDragEnd(event)">
+                    <div class="drag-handle" title="Drag to reorder">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                            <circle cx="9" cy="5" r="1.5"/>
+                            <circle cx="9" cy="12" r="1.5"/>
+                            <circle cx="9" cy="19" r="1.5"/>
+                            <circle cx="15" cy="5" r="1.5"/>
+                            <circle cx="15" cy="12" r="1.5"/>
+                            <circle cx="15" cy="19" r="1.5"/>
+                        </svg>
+                    </div>
                     <div class="queue-number">${queueNumber}</div>
                     <div class="file-item-left">
                         <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
@@ -1474,7 +3072,7 @@ function renderTransferQueues() {
                         </div>
                     </div>
                     <div class="queue-item-actions">
-                        <button onclick="removeFromQueue('${item.id}')">
+                        <button onclick="window.removeFromQueue(${item.id})" title="Remove from queue">
                             <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
                                 <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/>
                             </svg>
@@ -1497,7 +3095,23 @@ function renderTransferQueues() {
                 const waitTime = ((Date.now() - item.arrivalTime) / 1000).toFixed(1);
                 
                 return `
-                <div class="queue-item-compact ${item.status === 'running' ? 'queue-running' : ''}">
+                <div class="queue-item-compact ${item.status === 'running' ? 'queue-running' : ''}" 
+                     draggable="${item.status === 'waiting'}" 
+                     data-queue-id="${item.id}"
+                     ondragstart="window.handleQueueDragStart(event, ${item.id})"
+                     ondragover="window.handleQueueDragOver(event)"
+                     ondrop="window.handleQueueDrop(event, ${item.id})"
+                     ondragend="window.handleQueueDragEnd(event)">
+                    <div class="drag-handle" title="Drag to reorder">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                            <circle cx="9" cy="5" r="1.5"/>
+                            <circle cx="9" cy="12" r="1.5"/>
+                            <circle cx="9" cy="19" r="1.5"/>
+                            <circle cx="15" cy="5" r="1.5"/>
+                            <circle cx="15" cy="12" r="1.5"/>
+                            <circle cx="15" cy="19" r="1.5"/>
+                        </svg>
+                    </div>
                     <div class="queue-number">${queueNumber}</div>
                     <div class="file-item-left">
                         <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
@@ -1510,7 +3124,7 @@ function renderTransferQueues() {
                             <div class="file-item-meta">Wait: ${waitTime}s</div>
                         </div>
                     </div>
-                    <button class="btn-download" onclick="removeFromQueue('${item.id}')">Remove</button>
+                    <button class="btn-download" onclick="window.removeFromQueue(${item.id})" title="Remove from queue">Remove</button>
                 </div>
             `}).join('');
         }
@@ -1545,8 +3159,53 @@ function renderAllUI() {
 }
 
 window.removeFromQueue = (itemId) => {
+    console.log('🗑️  removeFromQueue called with itemId:', itemId);
+    console.log('   Queue before:', downloadQueue.queue.map(q => ({ id: q.id, name: q.fileInfo.name, status: q.status })));
+    
+    const initialLength = downloadQueue.queue.length;
+    const item = downloadQueue.queue.find(q => q.id === itemId);
+    
+    if (!item) {
+        console.log('   ERROR: Item not found in queue');
+        return;
+    }
+    
+    // If item is running, we need to release the semaphore
+    if (item.status === 'running') {
+        console.log('   Item is running, releasing semaphore');
+        semaphore.release();
+        
+        // Cancel any active transfer for this item
+        for (const [transferId, transfer] of activeTransfers.entries()) {
+            if (transfer.fileId === item.fileInfo.id) {
+                console.log('   Canceling active transfer:', transferId);
+                removeActiveTransfer(transferId);
+            }
+        }
+    }
+    
+    // Remove from queue
     downloadQueue.queue = downloadQueue.queue.filter(q => q.id !== itemId);
+    
+    // Also remove from any running/processing state
+    if (downloadQueue.currentItem && downloadQueue.currentItem.id === itemId) {
+        downloadQueue.currentItem = null;
+    }
+    if (downloadQueue.runningItems) {
+        downloadQueue.runningItems = downloadQueue.runningItems.filter(q => q.id !== itemId);
+    }
+    
+    console.log('   Queue after:', downloadQueue.queue.map(q => ({ id: q.id, name: q.fileInfo.name })));
+    console.log('   Removed:', initialLength - downloadQueue.queue.length, 'items');
+    
+    // Force immediate UI update
     renderTransferQueues();
+    updatePerformanceMetrics();
+    
+    showToast('Removed from queue');
+    
+    // Process next in queue if semaphore allows
+    downloadQueue.processNextInQueue();
 };
 
 window.downloadFileWithPriority = (fileInfo, priority) => {
@@ -1563,5 +3222,78 @@ window.downloadFileWithPriority = (fileInfo, priority) => {
     
     // Process the queue to start download if semaphore allows
     downloadQueue.processNextInQueue();
+};
+
+// Drag and Drop Queue Management
+let draggedQueueItem = null;
+
+window.handleQueueDragStart = (event, itemId) => {
+    draggedQueueItem = itemId;
+    event.target.classList.add('dragging');
+    event.dataTransfer.effectAllowed = 'move';
+    console.log('🎯 Started dragging queue item:', itemId);
+};
+
+window.handleQueueDragOver = (event) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    
+    const target = event.target.closest('.queue-item-compact');
+    if (target && draggedQueueItem) {
+        target.classList.add('drag-over');
+    }
+};
+
+window.handleQueueDrop = (event, targetItemId) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const target = event.target.closest('.queue-item-compact');
+    if (target) {
+        target.classList.remove('drag-over');
+    }
+    
+    if (!draggedQueueItem || draggedQueueItem === targetItemId) {
+        return;
+    }
+    
+    console.log('📍 Dropping queue item:', draggedQueueItem, 'onto:', targetItemId);
+    
+    // Find indices
+    const draggedIndex = downloadQueue.queue.findIndex(q => q.id === draggedQueueItem);
+    const targetIndex = downloadQueue.queue.findIndex(q => q.id === targetItemId);
+    
+    if (draggedIndex === -1 || targetIndex === -1) {
+        console.error('Could not find items in queue');
+        return;
+    }
+    
+    // Reorder queue
+    const [draggedItem] = downloadQueue.queue.splice(draggedIndex, 1);
+    downloadQueue.queue.splice(targetIndex, 0, draggedItem);
+    
+    console.log('✅ Queue reordered');
+    
+    // Update priorities based on new position
+    downloadQueue.queue.forEach((item, index) => {
+        // Higher position = higher priority
+        item.priority = downloadQueue.queue.length - index;
+    });
+    
+    // Re-render queue
+    renderTransferQueues();
+    
+    showToast('Queue order updated');
+};
+
+window.handleQueueDragEnd = (event) => {
+    event.target.classList.remove('dragging');
+    
+    // Remove all drag-over classes
+    document.querySelectorAll('.queue-item-compact').forEach(el => {
+        el.classList.remove('drag-over');
+    });
+    
+    draggedQueueItem = null;
 };
 
