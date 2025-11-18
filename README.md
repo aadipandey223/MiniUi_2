@@ -8,6 +8,10 @@ A peer-to-peer file sharing application using WebRTC for direct browser-to-brows
 - 🌐 Real-time peer connection status
 - 📱 Responsive design
 - 🔒 Secure transfers between peers
+- 🎯 **CPU Scheduling Algorithms** (FCFS, SJF, Priority)
+- 🔐 **Semaphore-based Connection Limiting**
+- 📊 **Real-time Performance Monitoring Dashboard**
+- ⚡ **Download Queue Management**
 
 ## Tech Stack
 - **Backend**: Node.js, Express, Socket.io

@@ -2,73 +2,230 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>P2P File Sharing</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>P2P Transfer - File Sharing</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🔗 P2P File Sharing</h1>
-            <p class="subtitle">Share files directly between browsers using WebRTC</p>
+    <div class="app-container">
+        <!-- Top Bar -->
+        <header class="top-bar">
+            <div class="top-bar-left">
+                <div class="app-title">
+                    <img src="logo.png" alt="P2P Logo" class="app-logo">
+                    <span>P2P Transfer</span>
+                </div>
+            </div>
+            <div class="top-bar-right">
+                <div class="connection-status">
+                    <span class="status-indicator" id="connectionStatus"></span>
+                    <span id="connectionText">Connecting...</span>
+                </div>
+                <div class="peer-count">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z"/>
+                    </svg>
+                    <span id="peerCount">0</span> Peers
+                </div>
+            </div>
         </header>
 
-        <div class="status-bar">
-            <div class="status-item">
-                <span class="status-label">Your ID:</span>
-                <span id="peerId" class="status-value">Connecting...</span>
+        <!-- Top Section: 4 Active Transfer Cards -->
+        <div class="top-cards">
+            <!-- Active Downloads Card -->
+            <div class="card">
+                <h3 class="card-title">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                        <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
+                    </svg>
+                    Active Downloads
+                </h3>
+                <div id="activeDownloadsList" class="active-list">
+                    <p class="empty-state">No active downloads</p>
+                </div>
             </div>
-            <div class="status-item">
-                <span class="status-label">Connected Peers:</span>
-                <span id="peerCount" class="status-value">0</span>
+
+            <!-- Active Uploads Card 1 -->
+            <div class="card">
+                <h3 class="card-title">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                        <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
+                    </svg>
+                    Active Uploads
+                </h3>
+                <div id="activeUploadsList1" class="active-list">
+                    <p class="empty-state">No active uploads</p>
+                </div>
             </div>
-            <div class="status-item">
-                <span class="status-indicator" id="connectionStatus"></span>
-                <span id="connectionText" class="status-value">Connecting...</span>
+
+            <!-- Active Uploads Card 2 -->
+            <div class="card">
+                <h3 class="card-title">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                        <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
+                    </svg>
+                    Active Uploads
+                </h3>
+                <div id="activeUploadsList2" class="active-list">
+                    <p class="empty-state">No active uploads</p>
+                </div>
+            </div>
+
+            <!-- Network Speed Graph Card -->
+            <div class="card">
+                <h3 class="card-title">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5h-2z"/>
+                    </svg>
+                    Confore tiores
+                </h3>
+                <div class="speed-display">
+                    <span class="speed-arrow">↑</span>
+                    <span id="topSpeedValue">0 MB/s</span>
+                </div>
+                <div class="mini-graph">
+                    <canvas id="miniSpeedGraph" width="240" height="60"></canvas>
+                </div>
             </div>
         </div>
 
-        <div class="main-content">
-            <!-- Upload Section -->
-            <section class="card upload-section">
-                <h2>📤 Share a File</h2>
-                <div class="upload-area" id="uploadArea">
-                    <input type="file" id="fileInput" hidden>
-                    <div class="upload-content">
-                        <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+        <!-- Middle Section: 3 Columns -->
+        <div class="main-layout">
+            <!-- Column 1: Your Shared Files -->
+            <div class="column">
+                <div class="card">
+                    <h3 class="card-title">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M9.828 3h3.982a2 2 0 0 1 1.992 2.181l-.637 7A2 2 0 0 1 13.174 14H2.825a2 2 0 0 1-1.991-1.819l-.637-7a1.99 1.99 0 0 1 .342-1.31L.5 3a2 2 0 0 1 2-2h3.672a2 2 0 0 1 1.414.586l.828.828A2 2 0 0 0 9.828 3zm-8.322.12C1.72 3.042 1.95 3 2.19 3h5.396l-.707-.707A1 1 0 0 0 6.172 2H2.5a1 1 0 0 0-1 .981l.006.139z"/>
                         </svg>
-                        <p class="upload-text">Click to select a file or drag & drop</p>
-                        <p class="upload-hint">Any file type, any size</p>
+                        Your Shared Files
+                    </h3>
+                    <div class="upload-area" id="uploadArea">
+                        <input type="file" id="fileInput" hidden>
+                        <svg class="upload-icon" width="32" height="32" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M9.828 3h3.982a2 2 0 0 1 1.992 2.181l-.637 7A2 2 0 0 1 13.174 14H2.825a2 2 0 0 1-1.991-1.819l-.637-7a1.99 1.99 0 0 1 .342-1.31L.5 3a2 2 0 0 1 2-2h3.672a2 2 0 0 1 1.414.586l.828.828A2 2 0 0 0 9.828 3z"/>
+                        </svg>
+                        <p class="upload-text">Drag & Drop Files Here</p>
+                        <p style="font-size: 11px; color: #9ca3af; margin-top: 4px;">Max: 500 MB per file</p>
+                    </div>
+                    <div class="button-group">
+                        <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                            Share Link
+                        </button>
+                        <button class="btn btn-icon">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div id="myFilesList" class="file-list-compact"></div>
+                </div>
+            </div>
+
+            <!-- Column 2: Available Files -->
+            <div class="column">
+                <div class="card">
+                    <h3 class="card-title">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5h-2z"/>
+                        </svg>
+                        Available Files
+                    </h3>
+                    <div id="availableFiles" class="file-list-compact">
+                        <p class="empty-state">No files available</p>
                     </div>
                 </div>
-                
-                <div id="myFiles" class="file-list-container">
-                    <h3>Your Shared Files</h3>
-                    <div id="myFilesList" class="file-list"></div>
-                </div>
-            </section>
+            </div>
 
-            <!-- Download Section -->
-            <section class="card download-section">
-                <h2>📥 Available Files</h2>
-                <div id="availableFiles" class="file-list">
-                    <p class="empty-message">No files available. Wait for peers to share files...</p>
-                </div>
-            </section>
-        </div>
+            <!-- Column 3: Performance -->
+            <div class="column">
+                <div class="card">
+                    <h3 class="card-title">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                            <path d="M4.285 12.433a.5.5 0 0 0 .683-.183A3.498 3.498 0 0 1 8 10.5c1.295 0 2.426.703 3.032 1.75a.5.5 0 0 0 .866-.5A4.498 4.498 0 0 0 8 9.5a4.5 4.5 0 0 0-3.898 2.25.5.5 0 0 0 .183.683z"/>
+                        </svg>
+                        Sposter Files
+                    </h3>
+                    
+                    <!-- Connections -->
+                    <div class="perf-section">
+                        <div class="perf-label">Connections</div>
+                        <div class="connection-icons">
+                            <span>+</span>
+                            <span>○</span>
+                            <span>□</span>
+                        </div>
+                        <div class="progress-bar-slim">
+                            <div id="connectionProgress" class="progress-fill-slim"></div>
+                        </div>
+                        <div class="perf-value" id="connectionStat">0/3 Active</div>
+                    </div>
 
-        <!-- Transfer Progress Modal -->
-        <div id="progressModal" class="modal">
-            <div class="modal-content">
-                <h3 id="progressTitle">Transferring File...</h3>
-                <div class="progress-bar">
-                    <div id="progressFill" class="progress-fill"></div>
+                    <div class="perf-divider"></div>
+
+                    <!-- Avg Queue Time -->
+                    <div class="perf-row">
+                        <span class="perf-label">Avg. Queue Time:</span>
+                        <span class="perf-value" id="avgQueueTime">0s</span>
+                    </div>
+
+                    <div class="perf-divider"></div>
+
+                    <!-- Transfer Stats -->
+                    <div class="perf-section">
+                        <div class="perf-subtitle">Transfer Files</div>
+                        <div class="perf-row">
+                            <span class="perf-label">Avg. Queue Time:</span>
+                            <span class="perf-value">1s</span>
+                        </div>
+                        <div class="perf-row">
+                            <span class="perf-label">Completed Today:</span>
+                            <span class="perf-value perf-success">✓ <span id="completedToday">0</span></span>
+                        </div>
+                        <div class="perf-row">
+                            <span class="perf-label">Failed:</span>
+                            <span class="perf-value perf-error">✗ <span id="failedTransfers">0</span></span>
+                        </div>
+                    </div>
+
                 </div>
-                <p id="progressText">0%</p>
-                <p id="progressSpeed" class="progress-speed"></p>
             </div>
         </div>
+
+        <!-- Bottom Section: 2 Transfer Queues -->
+        <div class="bottom-section">
+            <!-- Transfer Queue 1 -->
+            <div class="card">
+                <h3 class="card-title">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5h-2z"/>
+                    </svg>
+                    Transfer Queue
+                </h3>
+                <div id="queueList1" class="queue-list-compact"></div>
+            </div>
+
+            <!-- Transfer Queue 2 -->
+            <div class="card">
+                <h3 class="card-title">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5h-2z"/>
+                    </svg>
+                    Transfer Queue
+                </h3>
+                <div id="queueList2" class="queue-list-compact"></div>
+            </div>
+        </div>
+
+        <!-- Toast Notification -->
+        <div id="toast" class="toast">File received successfully!</div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>

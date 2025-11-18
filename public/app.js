@@ -16,27 +16,225 @@ let availableFiles = [];
 let peerConnections = new Map(); // Map of peer connections
 let dataChannels = new Map(); // Map of data channels
 
+// OS Concepts: Download Queue with Scheduling Algorithms
+class DownloadQueue {
+    constructor() {
+        this.queue = [];
+        this.activeDownloads = new Set();
+        this.completedDownloads = [];
+        this.schedulingAlgorithm = 'FCFS'; // FCFS, SJF, Priority
+    }
+    
+    addToQueue(fileInfo, priority = 1) {
+        const queueItem = {
+            id: Date.now() + Math.random(),
+            fileInfo: fileInfo,
+            priority: priority,
+            size: fileInfo.size,
+            arrivalTime: Date.now(),
+            startTime: null,
+            endTime: null,
+            status: 'waiting' // waiting, running, completed
+        };
+        
+        // Priority items go first, then FCFS
+        if (priority >= 10) {
+            // Insert at front of queue
+            this.queue.unshift(queueItem);
+        } else {
+            this.queue.push(queueItem);
+        }
+        
+        this.updateQueueUI();
+        return queueItem.id;
+    }
+    
+    sortQueue() {
+        switch(this.schedulingAlgorithm) {
+            case 'FCFS': // First Come First Serve
+                this.queue.sort((a, b) => a.arrivalTime - b.arrivalTime);
+                break;
+            case 'SJF': // Shortest Job First
+                this.queue.sort((a, b) => a.size - b.size);
+                break;
+            case 'Priority': // Priority Scheduling
+                this.queue.sort((a, b) => b.priority - a.priority);
+                break;
+        }
+    }
+    
+    getNext() {
+        return this.queue.find(item => item.status === 'waiting');
+    }
+    
+    startDownload(queueId) {
+        const item = this.queue.find(q => q.id === queueId);
+        if (item) {
+            item.status = 'running';
+            item.startTime = Date.now();
+            this.activeDownloads.add(queueId);
+            this.updateQueueUI();
+        }
+    }
+    
+    completeDownload(queueId) {
+        const item = this.queue.find(q => q.id === queueId);
+        if (item) {
+            item.status = 'completed';
+            item.endTime = Date.now();
+            this.activeDownloads.delete(queueId);
+            this.completedDownloads.push(item);
+            this.queue = this.queue.filter(q => q.id !== queueId);
+            this.updateQueueUI();
+            this.processNextInQueue();
+        }
+    }
+    
+    processNextInQueue() {
+        console.log('processNextInQueue called', {
+            canAcquire: semaphore.canAcquire(),
+            currentCount: semaphore.currentCount,
+            maxConcurrent: semaphore.maxConcurrent,
+            queueLength: this.queue.length,
+            waitingItems: this.queue.filter(q => q.status === 'waiting').length
+        });
+        
+        if (semaphore.canAcquire() && this.queue.length > 0) {
+            const next = this.getNext();
+            if (next) {
+                console.log('Starting next download:', next.fileInfo.name);
+                semaphore.acquire();
+                downloadFileFromQueue(next);
+            } else {
+                console.log('No waiting items in queue');
+            }
+        } else {
+            console.log('Cannot process: semaphore full or queue empty');
+        }
+    }
+    
+    updateQueueUI() {
+        renderTransferQueues();
+        updatePerformanceMetrics();
+    }
+}
+
+// OS Concepts: Semaphore for Connection Limiting
+class Semaphore {
+    constructor(maxConcurrent = 3) {
+        this.maxConcurrent = maxConcurrent;
+        this.currentCount = 0;
+        this.waiting = [];
+    }
+    
+    canAcquire() {
+        return this.currentCount < this.maxConcurrent;
+    }
+    
+    acquire() {
+        if (this.canAcquire()) {
+            this.currentCount++;
+            updatePerformanceMetrics();
+            return true;
+        }
+        return false;
+    }
+    
+    release() {
+        if (this.currentCount > 0) {
+            this.currentCount--;
+            updatePerformanceMetrics();
+            // Process waiting downloads
+            downloadQueue.processNextInQueue();
+        }
+    }
+    
+    getUtilization() {
+        return (this.currentCount / this.maxConcurrent * 100).toFixed(1);
+    }
+}
+
+// Initialize OS components
+const downloadQueue = new DownloadQueue();
+const semaphore = new Semaphore(3); // Max 3 concurrent downloads
+
+// Performance Metrics - Application Level Monitoring
+const performanceMetrics = {
+    // Transfer Statistics
+    totalDownloads: 0,
+    totalUploads: 0,
+    failedTransfers: 0,
+    
+    // Network Performance
+    currentDownloadSpeed: 0,
+    currentUploadSpeed: 0,
+    peakDownloadSpeed: 0,
+    totalDataDownloaded: 0,
+    totalDataUploaded: 0,
+    
+    // Memory Usage (Application Level)
+    filesInMemory: 0,
+    memoryUsedMB: 0,
+    bufferSizeMB: 0,
+    
+    // Connection Statistics
+    activeConnections: 0,
+    totalConnectionAttempts: 0,
+    averageConnectionTime: 0,
+    
+    // Scheduling Metrics (OS Concepts)
+    averageWaitTime: 0,
+    averageTurnaroundTime: 0,
+    averageResponseTime: 0,
+    throughput: 0,
+    
+    // Semaphore Status
+    resourceUtilization: 0,
+    blockedRequests: 0,
+    
+    // Timestamps
+    startTime: Date.now(),
+    lastUpdateTime: Date.now()
+};
+
+// Transfer history for recent transfers display
+const transferHistory = [];
+
 // DOM elements
 const fileInput = document.getElementById('fileInput');
 const uploadArea = document.getElementById('uploadArea');
 const myFilesList = document.getElementById('myFilesList');
 const availableFilesList = document.getElementById('availableFiles');
-const progressModal = document.getElementById('progressModal');
-const progressFill = document.getElementById('progressFill');
-const progressText = document.getElementById('progressText');
-const progressSpeed = document.getElementById('progressSpeed');
-const progressTitle = document.getElementById('progressTitle');
+const queueList1 = document.getElementById('queueList1');
+const queueList2 = document.getElementById('queueList2');
+const activeDownloadsList = document.getElementById('activeDownloadsList');
+const activeUploadsList1 = document.getElementById('activeUploadsList1');
+const activeUploadsList2 = document.getElementById('activeUploadsList2');
+const miniSpeedGraph = document.getElementById('miniSpeedGraph');
+const topSpeedValue = document.getElementById('topSpeedValue');
+
+// Active transfers tracking
+const activeTransfers = new Map(); // Map of transfer ID to transfer data
+
+// Network speed graph data
+const speedHistory = [];
+const maxSpeedDataPoints = 30;
+let speedGraphContext = null;
 
 // Socket.io event listeners
 socket.on('connect', () => {
     myPeerId = socket.id;
-    document.getElementById('peerId').textContent = myPeerId.substring(0, 8);
-    document.getElementById('connectionStatus').classList.add('connected');
-    document.getElementById('connectionText').textContent = 'Connected';
+    const statusEl = document.getElementById('connectionStatus');
+    const textEl = document.getElementById('connectionText');
+    if (statusEl) statusEl.classList.add('connected');
+    if (textEl) textEl.textContent = 'Connected';
 });
 
 socket.on('peers-list', (peers) => {
-    document.getElementById('peerCount').textContent = peers.length - 1;
+    const peerCountEl = document.getElementById('peerCount');
+    if (peerCountEl) {
+        peerCountEl.textContent = Math.max(0, peers.length - 1);
+    }
 });
 
 socket.on('peer-joined', (peer) => {
@@ -57,19 +255,51 @@ socket.on('peer-left', (peer) => {
 
 socket.on('files-list', (files) => {
     availableFiles = files.filter(file => file.peerId !== myPeerId);
-    renderAvailableFiles();
+    renderAvailableFilesCompact();
 });
 
 socket.on('file-available', (file) => {
     if (file.peerId !== myPeerId) {
         availableFiles.push(file);
-        renderAvailableFiles();
+        renderAvailableFilesCompact();
     }
 });
 
 // WebRTC signaling
 socket.on('offer', async ({ offer, fromPeerId }) => {
     const pc = createPeerConnection(fromPeerId);
+    
+    // Handle incoming data channel (when peer requests a file)
+    pc.ondatachannel = (event) => {
+        const dataChannel = event.channel;
+        console.log('Data channel received from:', fromPeerId);
+        
+        dataChannel.onmessage = async (e) => {
+            if (typeof e.data === 'string') {
+                try {
+                    const request = JSON.parse(e.data);
+                    console.log('File request received:', request);
+                    
+                    if (request.type === 'request' && request.fileName) {
+                        // Find the file in my shared files
+                        const fileKey = Array.from(mySharedFiles.keys()).find(key => 
+                            key.includes(request.fileName) || key.endsWith(request.fileName)
+                        );
+                        
+                        if (fileKey) {
+                            const file = mySharedFiles.get(fileKey);
+                            console.log('Sending file:', file.name);
+                            await sendFile(dataChannel, file);
+                        } else {
+                            console.error('File not found:', request.fileName);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error handling request:', error);
+                }
+            }
+        };
+    };
     
     await pc.setRemoteDescription(new RTCSessionDescription(offer));
     const answer = await pc.createAnswer();
@@ -122,8 +352,14 @@ uploadArea.addEventListener('drop', (e) => {
     e.preventDefault();
     uploadArea.classList.remove('drag-over');
     
+    const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 MB
     const file = e.dataTransfer.files[0];
+    
     if (file) {
+        if (file.size > MAX_FILE_SIZE) {
+            showToast(`File too large: ${file.name}. Max size is 500 MB`, 'error');
+            return;
+        }
         shareFile(file);
     }
 });
@@ -135,6 +371,11 @@ function shareFile(file) {
     // Store file in memory
     mySharedFiles.set(fileId, file);
     
+    // Update memory metrics
+    performanceMetrics.filesInMemory = mySharedFiles.size;
+    performanceMetrics.memoryUsedMB = Array.from(mySharedFiles.values())
+        .reduce((sum, f) => sum + f.size, 0) / (1024 * 1024);
+    
     // Notify server
     socket.emit('share-file', {
         name: file.name,
@@ -142,7 +383,8 @@ function shareFile(file) {
         type: file.type || 'application/octet-stream'
     });
     
-    renderMyFiles();
+    renderMyFilesCompact();
+    updatePerformanceMetrics();
 }
 
 // Create peer connection
@@ -191,23 +433,16 @@ function setupDataChannel(dataChannel, peerId, isReceiver = false) {
                 totalSize = metadata.size;
                 fileName = metadata.name;
                 startTime = Date.now();
-                
-                progressTitle.textContent = `Receiving: ${fileName}`;
-                showProgress();
             } else {
                 // File chunk
                 receivedBuffer.push(event.data);
                 receivedSize += event.data.byteLength;
-                
-                const progress = (receivedSize / totalSize) * 100;
-                updateProgress(progress, receivedSize, totalSize, startTime);
                 
                 if (receivedSize === totalSize) {
                     const blob = new Blob(receivedBuffer);
                     downloadBlob(blob, fileName);
                     receivedBuffer = [];
                     receivedSize = 0;
-                    hideProgress();
                 }
             }
         };
@@ -219,50 +454,32 @@ function setupDataChannel(dataChannel, peerId, isReceiver = false) {
     
     dataChannel.onerror = (error) => {
         console.error('Data channel error:', error);
-        hideProgress();
     };
 }
 
 // Download file from peer
-async function downloadFile(fileInfo) {
-    const peerId = fileInfo.peerId;
+// Download file with priority
+window.downloadFile = (fileId, priority = 5) => {
+    const file = availableFiles.find(f => f.id === fileId);
+    if (!file) {
+        showToast('File not found');
+        return;
+    }
     
-    // Create peer connection if not exists
-    const pc = createPeerConnection(peerId);
+    // Add to queue
+    const queueId = downloadQueue.addToQueue(file, priority);
     
-    // Create data channel
-    const dataChannel = pc.createDataChannel('fileTransfer');
-    setupDataChannel(dataChannel, peerId, false);
-    
-    // Create and send offer
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    
-    socket.emit('offer', {
-        offer: offer,
-        targetPeerId: peerId
-    });
-    
-    // Wait for data channel to open, then request file
-    dataChannel.onopen = () => {
-        // Find the actual file from my shared files
-        const fileKey = Array.from(mySharedFiles.keys()).find(key => 
-            key.includes(fileInfo.name)
-        );
-        
-        // In a real scenario, the receiver would send a request
-        // For now, if we're the sender, we send immediately when channel opens
-    };
-}
+    // Try to start download if semaphore allows
+    downloadQueue.processNextInQueue();
+};
 
 // Send file through data channel
 async function sendFile(dataChannel, file) {
     const chunkSize = 16384; // 16KB chunks
     const totalSize = file.size;
     let offset = 0;
-    
-    progressTitle.textContent = `Sending: ${file.name}`;
-    showProgress();
+    let lastProgressTime = Date.now();
+    let lastSentSize = 0;
     
     const startTime = Date.now();
     
@@ -273,6 +490,9 @@ async function sendFile(dataChannel, file) {
         type: file.type
     }));
     
+    // Track buffer size
+    performanceMetrics.bufferSizeMB = chunkSize / (1024 * 1024);
+    
     // Send file in chunks
     const readChunk = () => {
         const slice = file.slice(offset, offset + chunkSize);
@@ -282,13 +502,37 @@ async function sendFile(dataChannel, file) {
             dataChannel.send(e.target.result);
             offset += chunkSize;
             
-            const progress = (offset / totalSize) * 100;
-            updateProgress(progress, offset, totalSize, startTime);
+            // Calculate upload speed
+            const now = Date.now();
+            const timeDelta = (now - lastProgressTime) / 1000;
+            if (timeDelta > 0.1) {
+                const sizeDelta = offset - lastSentSize;
+                const speedBytesPerSec = sizeDelta / timeDelta;
+                performanceMetrics.currentUploadSpeed = speedBytesPerSec;
+                lastProgressTime = now;
+                lastSentSize = offset;
+            }
             
             if (offset < totalSize) {
                 readChunk();
             } else {
-                hideProgress();
+                performanceMetrics.totalUploads++;
+                performanceMetrics.totalDataUploaded += totalSize;
+                performanceMetrics.currentUploadSpeed = 0;
+                
+                // Add to transfer history
+                const transferTime = (Date.now() - startTime) / 1000;
+                transferHistory.unshift({
+                    name: file.name,
+                    size: totalSize,
+                    time: transferTime,
+                    speed: totalSize / transferTime,
+                    type: 'upload',
+                    timestamp: Date.now()
+                });
+                if (transferHistory.length > 10) transferHistory.pop();
+                
+                updatePerformanceMetrics();
             }
         };
         
@@ -299,10 +543,41 @@ async function sendFile(dataChannel, file) {
 }
 
 // Handle download button click
-window.downloadFile = async (fileId) => {
+window.downloadFile = async (fileId, priority = 1) => {
     const fileInfo = availableFiles.find(f => f.id === fileId);
     if (!fileInfo) return;
     
+    // Add to download queue
+    const queueId = downloadQueue.addToQueue(fileInfo, priority);
+    
+    // If semaphore allows, start immediately
+    if (semaphore.canAcquire()) {
+        semaphore.acquire();
+        const queueItem = downloadQueue.queue.find(q => q.id === queueId);
+        if (queueItem) {
+            downloadQueue.startDownload(queueId);
+            await performDownload(fileInfo, queueId);
+        }
+    }
+};
+
+// Actual download function
+async function downloadFileFromQueue(queueItem) {
+    try {
+        downloadQueue.startDownload(queueItem.id);
+        performanceMetrics.totalConnectionAttempts++;
+        const connectionStartTime = Date.now();
+        
+        console.log('Starting download from queue:', queueItem.fileInfo.name);
+        await performDownload(queueItem.fileInfo, queueItem.id, connectionStartTime);
+    } catch (error) {
+        console.error('Download failed:', error);
+        downloadQueue.completeDownload(queueItem.id);
+        semaphore.release();
+    }
+}
+
+async function performDownload(fileInfo, queueId, connectionStartTime = Date.now()) {
     const peerId = fileInfo.peerId;
     const pc = createPeerConnection(peerId);
     
@@ -314,6 +589,20 @@ window.downloadFile = async (fileId) => {
     let totalSize = 0;
     let fileName = '';
     let startTime = 0;
+    let firstChunkTime = 0;
+    let lastProgressTime = Date.now();
+    let lastReceivedSize = 0;
+    const transferId = `download-${Date.now()}`;
+    
+    dataChannel.onopen = () => {
+        console.log('Data channel opened, requesting file:', fileInfo.name);
+        // Request the file
+        dataChannel.send(JSON.stringify({
+            type: 'request',
+            fileId: fileInfo.id,
+            fileName: fileInfo.name
+        }));
+    };
     
     dataChannel.onmessage = (event) => {
         if (typeof event.data === 'string') {
@@ -321,27 +610,117 @@ window.downloadFile = async (fileId) => {
             totalSize = metadata.size;
             fileName = metadata.name;
             startTime = Date.now();
-            progressTitle.textContent = `Receiving: ${fileName}`;
-            showProgress();
+            firstChunkTime = 0;
+            
+            // Add to active transfers
+            updateActiveTransfer(transferId, {
+                id: transferId,
+                name: fileName,
+                type: 'download',
+                progress: 0,
+                speed: 0,
+                transferred: 0,
+                total: totalSize,
+                peerId: peerId.substring(0, 8)
+            });
+            
+            // Calculate connection time
+            const connectionTime = startTime - connectionStartTime;
+            const totalConnectionTime = performanceMetrics.averageConnectionTime * performanceMetrics.totalDownloads;
+            performanceMetrics.averageConnectionTime = (totalConnectionTime + connectionTime) / (performanceMetrics.totalDownloads + 1);
         } else {
+            if (firstChunkTime === 0) {
+                firstChunkTime = Date.now();
+                // Response time = time to first chunk
+                const queueItem = downloadQueue.queue.find(q => q.id === queueId);
+                if (queueItem) {
+                    queueItem.responseTime = firstChunkTime - startTime;
+                }
+            }
+            
             receivedBuffer.push(event.data);
             receivedSize += event.data.byteLength;
             
-            const progress = (receivedSize / totalSize) * 100;
-            updateProgress(progress, receivedSize, totalSize, startTime);
+            // Calculate download speed
+            const now = Date.now();
+            const timeDelta = (now - lastProgressTime) / 1000; // seconds
+            if (timeDelta > 0.1) { // Update every 100ms
+                const sizeDelta = receivedSize - lastReceivedSize;
+                const speedBytesPerSec = sizeDelta / timeDelta;
+                performanceMetrics.currentDownloadSpeed = speedBytesPerSec;
+                
+                if (speedBytesPerSec > performanceMetrics.peakDownloadSpeed) {
+                    performanceMetrics.peakDownloadSpeed = speedBytesPerSec;
+                }
+                
+                // Update active transfer display
+                const progress = (receivedSize / totalSize) * 100;
+                updateActiveTransfer(transferId, {
+                    progress: progress,
+                    speed: speedBytesPerSec,
+                    transferred: receivedSize
+                });
+                
+                lastProgressTime = now;
+                lastReceivedSize = receivedSize;
+            }
             
             if (receivedSize === totalSize) {
                 const blob = new Blob(receivedBuffer);
                 downloadBlob(blob, fileName);
+                
+                // Remove from active transfers
+                removeActiveTransfer(transferId);
+                
+                // Update metrics
+                performanceMetrics.totalDownloads++;
+                performanceMetrics.totalDataDownloaded += totalSize;
+                performanceMetrics.currentDownloadSpeed = 0;
+                
+                // Add to transfer history
+                const transferTime = (Date.now() - startTime) / 1000;
+                transferHistory.unshift({
+                    name: fileName,
+                    size: totalSize,
+                    time: transferTime,
+                    speed: totalSize / transferTime,
+                    type: 'download',
+                    algorithm: downloadQueue.schedulingAlgorithm,
+                    timestamp: Date.now()
+                });
+                if (transferHistory.length > 10) transferHistory.pop();
+                
                 receivedBuffer = [];
                 receivedSize = 0;
-                hideProgress();
+                
+                // Show toast
+                showToast(`File received: ${fileName}`);
+                
+                // Complete download in queue and release semaphore
+                downloadQueue.completeDownload(queueId);
+                semaphore.release();
+                
+                updatePerformanceMetrics();
+                updatePerformanceUI();
             }
         }
     };
     
-    dataChannel.onopen = () => {
-        dataChannel.send(JSON.stringify({ requestFile: fileInfo.name }));
+    dataChannel.onerror = (error) => {
+        console.error('Data channel error:', error);
+        performanceMetrics.failedTransfers++;
+        removeActiveTransfer(transferId);
+        downloadQueue.completeDownload(queueId);
+        semaphore.release();
+        updatePerformanceMetrics();
+        updatePerformanceUI();
+    };
+    
+    dataChannel.onclose = () => {
+        performanceMetrics.activeConnections = Math.max(0, performanceMetrics.activeConnections - 1);
+        removeActiveTransfer(transferId);
+        updatePerformanceMetrics();
+        updatePerformanceUI();
     };
     
     // Create and send offer
@@ -349,43 +728,7 @@ window.downloadFile = async (fileId) => {
     await pc.setLocalDescription(offer);
     
     socket.emit('offer', { offer: offer, targetPeerId: peerId });
-};
-
-// Listen for file requests and send files
-function setupFileSharing() {
-    socket.on('offer', async ({ offer, fromPeerId }) => {
-        const pc = createPeerConnection(fromPeerId);
-        
-        pc.ondatachannel = (event) => {
-            const dataChannel = event.channel;
-            
-            dataChannel.onmessage = async (e) => {
-                if (typeof e.data === 'string') {
-                    const request = JSON.parse(e.data);
-                    if (request.requestFile) {
-                        // Find and send the requested file
-                        const fileKey = Array.from(mySharedFiles.keys()).find(key => 
-                            key.includes(request.requestFile)
-                        );
-                        
-                        if (fileKey) {
-                            const file = mySharedFiles.get(fileKey);
-                            await sendFile(dataChannel, file);
-                        }
-                    }
-                }
-            };
-        };
-        
-        await pc.setRemoteDescription(new RTCSessionDescription(offer));
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        
-        socket.emit('answer', { answer: answer, targetPeerId: fromPeerId });
-    });
 }
-
-setupFileSharing();
 
 // Download blob as file
 function downloadBlob(blob, filename) {
@@ -400,29 +743,15 @@ function downloadBlob(blob, filename) {
 }
 
 // Progress UI
-function showProgress() {
-    progressModal.classList.add('active');
-}
-
-function hideProgress() {
-    setTimeout(() => {
-        progressModal.classList.remove('active');
-        progressFill.style.width = '0%';
-        progressText.textContent = '0%';
-    }, 1000);
-}
-
-function updateProgress(percentage, current, total, startTime) {
-    progressFill.style.width = `${percentage}%`;
-    progressText.textContent = `${percentage.toFixed(1)}%`;
-    
-    const elapsed = (Date.now() - startTime) / 1000;
-    const speed = current / elapsed / 1024 / 1024;
-    progressSpeed.textContent = `${formatBytes(current)} / ${formatBytes(total)} - ${speed.toFixed(2)} MB/s`;
-}
-
 // Render functions
 function renderMyFiles() {
+    if (!myFilesList) return;
+    
+    if (mySharedFiles.size === 0) {
+        myFilesList.innerHTML = '';
+        return;
+    }
+    
     myFilesList.innerHTML = '';
     
     mySharedFiles.forEach((file, fileId) => {
@@ -442,8 +771,10 @@ function renderMyFiles() {
 }
 
 function renderAvailableFiles() {
+    if (!availableFilesList) return;
+    
     if (availableFiles.length === 0) {
-        availableFilesList.innerHTML = '<p class="empty-message">No files available. Wait for peers to share files...</p>';
+        availableFilesList.innerHTML = '<p class="empty-state">No files available. Wait for peers to share files...</p>';
         return;
     }
     
@@ -458,17 +789,360 @@ function renderAvailableFiles() {
                 <div class="file-meta">${formatBytes(file.size)} • From peer: ${file.peerId.substring(0, 8)}</div>
             </div>
             <div class="file-actions">
-                <button class="btn btn-primary" onclick="downloadFile('${file.id}')">Download</button>
+                <select class="priority-select" id="priority-${file.id}">
+                    <option value="1">Low Priority</option>
+                    <option value="5" selected>Normal Priority</option>
+                    <option value="10">High Priority</option>
+                </select>
+                <button class="btn btn-primary" onclick="downloadWithPriority('${file.id}')">Download</button>
             </div>
         `;
         availableFilesList.appendChild(fileItem);
     });
 }
 
+function renderDownloadQueue() {
+    if (!queueList) return;
+    
+    if (downloadQueue.queue.length === 0 && downloadQueue.completedDownloads.length === 0) {
+        queueList.innerHTML = '<p class="empty-state">Queue is empty</p>';
+        return;
+    }
+    
+    queueList.innerHTML = '';
+    
+    [...downloadQueue.queue, ...downloadQueue.completedDownloads.slice(-5)].forEach(item => {
+        const queueItem = document.createElement('div');
+        queueItem.className = `queue-item queue-${item.status}`;
+        
+        const waitTime = item.startTime ? item.startTime - item.arrivalTime : Date.now() - item.arrivalTime;
+        const turnaroundTime = item.endTime ? item.endTime - item.arrivalTime : 0;
+        
+        // Icon based on status
+        let icon = '⏳';
+        if (item.status === 'running') icon = '⚡';
+        if (item.status === 'completed') icon = '✅';
+        
+        queueItem.innerHTML = `
+            <div class="queue-icon">${icon}</div>
+            <div class="queue-info">
+                <div class="queue-name">${item.fileInfo.name}</div>
+                <div class="queue-meta">
+                    ${formatBytes(item.size)} • Priority: ${item.priority} • ${item.status.toUpperCase()}
+                    ${item.status === 'waiting' ? ` • Wait: ${(waitTime / 1000).toFixed(1)}s` : ''}
+                    ${item.status === 'completed' ? ` • Turnaround: ${(turnaroundTime / 1000).toFixed(1)}s` : ''}
+                </div>
+            </div>
+        `;
+        queueList.appendChild(queueItem);
+    });
+}
+
+function updatePerformanceMetrics() {
+    const uptime = (Date.now() - performanceMetrics.startTime) / 1000;
+    
+    // Calculate scheduling metrics (OS Concepts)
+    const completed = downloadQueue.completedDownloads;
+    if (completed.length > 0) {
+        const totalWait = completed.reduce((sum, item) => sum + (item.startTime - item.arrivalTime), 0);
+        const totalTurnaround = completed.reduce((sum, item) => sum + (item.endTime - item.arrivalTime), 0);
+        const totalResponse = completed.reduce((sum, item) => sum + (item.responseTime || 0), 0);
+        
+        performanceMetrics.averageWaitTime = totalWait / completed.length / 1000;
+        performanceMetrics.averageTurnaroundTime = totalTurnaround / completed.length / 1000;
+        performanceMetrics.averageResponseTime = totalResponse / completed.length / 1000;
+        performanceMetrics.throughput = completed.length / uptime * 60;
+    } else {
+        // Calculate throughput for completed transfers in last minute
+        const oneMinuteAgo = Date.now() - 60000;
+        const recentCompleted = completed.filter(item => item.endTime > oneMinuteAgo);
+        performanceMetrics.throughput = recentCompleted.length;
+    }
+    
+    // Semaphore metrics
+    performanceMetrics.resourceUtilization = parseFloat(semaphore.getUtilization());
+    performanceMetrics.blockedRequests = downloadQueue.queue.filter(q => q.status === 'waiting').length;
+    performanceMetrics.activeConnections = semaphore.currentCount;
+    
+    // Update UI
+    updatePerformanceUI();
+}
+
+// Download with priority
+window.downloadWithPriority = (fileId) => {
+    const prioritySelect = document.getElementById(`priority-${fileId}`);
+    const priority = prioritySelect ? parseInt(prioritySelect.value) : 5;
+    downloadFile(fileId, priority);
+};
+
+// Change scheduling algorithm
+window.changeSchedulingAlgorithm = () => {
+    if (schedulingSelect) {
+        downloadQueue.schedulingAlgorithm = schedulingSelect.value;
+        downloadQueue.sortQueue();
+        downloadQueue.updateQueueUI();
+    }
+};
+
+// Change semaphore limit
+window.changeSemaphoreLimit = () => {
+    if (semaphoreLimit) {
+        const newLimit = parseInt(semaphoreLimit.value);
+        semaphore.maxConcurrent = newLimit;
+        updatePerformanceMetrics();
+    }
+};
+
+// Initialize performance monitoring
+setInterval(() => {
+    updatePerformanceMetrics();
+    renderDownloadQueue();
+    updateSpeedGraph();
+}, 1000);
+
+// Helper function for transfer history
+function renderTransferHistory() {
+    const historyEl = document.getElementById('transferHistory');
+    if (!historyEl || transferHistory.length === 0) return;
+    
+    historyEl.innerHTML = transferHistory.map(transfer => {
+        const icon = transfer.type === 'download' ? '📥' : '📤';
+        const typeClass = transfer.type === 'download' ? 'download' : 'upload';
+        const algorithm = transfer.algorithm ? ` (${transfer.algorithm})` : '';
+        
+        return `
+            <div class="history-item ${typeClass}">
+                <span class="history-icon">${icon}</span>
+                <div class="history-info">
+                    <div class="history-name">${transfer.name}</div>
+                    <div class="history-meta">
+                        ${formatBytes(transfer.size)} • 
+                        ${transfer.time.toFixed(1)}s • 
+                        ${formatSpeed(transfer.speed)}${algorithm}
+                    </div>
+                </div>
+                <div class="history-status">✅</div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Render active transfers
+function renderActiveTransfers() {
+    if (!activeTransfersList) return;
+    
+    if (activeTransfers.size === 0) {
+        activeTransfersList.innerHTML = '<p class="empty-state">No active transfers</p>';
+        return;
+    }
+    
+    activeTransfersList.innerHTML = Array.from(activeTransfers.values()).map(transfer => {
+        const percentage = transfer.progress.toFixed(1);
+        const speed = formatSpeed(transfer.speed);
+        const transferred = formatBytes(transfer.transferred);
+        const total = formatBytes(transfer.total);
+        const typeClass = transfer.type === 'upload' ? 'upload' : '';
+        
+        return `
+            <div class="transfer-item">
+                <div class="transfer-header">
+                    <div class="transfer-info">
+                        <h4>${transfer.name}</h4>
+                        <div class="transfer-peer">From: ${transfer.peerId || 'peer'}</div>
+                    </div>
+                    <div class="transfer-stats">
+                        <div class="transfer-percentage">${percentage}%</div>
+                        <div class="transfer-speed">${speed}</div>
+                    </div>
+                </div>
+                <div class="transfer-progress">
+                    <div class="transfer-progress-fill ${typeClass}" style="width: ${percentage}%"></div>
+                </div>
+                <div class="transfer-size">${transferred} / ${total}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Update active transfer
+function updateActiveTransfer(transferId, data) {
+    if (activeTransfers.has(transferId)) {
+        const transfer = activeTransfers.get(transferId);
+        Object.assign(transfer, data);
+    } else {
+        activeTransfers.set(transferId, data);
+    }
+    renderActiveDownloads();
+    renderActiveUploads();
+}
+
+// Remove active transfer
+function removeActiveTransfer(transferId) {
+    activeTransfers.delete(transferId);
+    renderActiveDownloads();
+    renderActiveUploads();
+}
+
+// Initialize speed graph
+function initSpeedGraph() {
+    if (!speedGraph) return;
+    
+    // Set canvas size to match display size
+    const rect = speedGraph.getBoundingClientRect();
+    speedGraph.width = rect.width || 300;
+    speedGraph.height = 120;
+    
+    speedGraphContext = speedGraph.getContext('2d');
+    drawSpeedGraph();
+}
+
+// Update speed graph
+function updateSpeedGraph() {
+    const currentSpeed = (performanceMetrics.currentDownloadSpeed + performanceMetrics.currentUploadSpeed) / (1024 * 1024); // MB/s
+    
+    speedHistory.push(currentSpeed);
+    if (speedHistory.length > maxSpeedDataPoints) {
+        speedHistory.shift();
+    }
+    
+    // Update current speed display
+    const currentSpeedEl = document.getElementById('currentSpeed');
+    if (currentSpeedEl) {
+        currentSpeedEl.textContent = `${currentSpeed.toFixed(2)} MB/s`;
+    }
+    
+    drawSpeedGraph();
+}
+
+// Draw speed graph on canvas
+function drawSpeedGraph() {
+    if (!speedGraphContext || !speedGraph) return;
+    
+    const ctx = speedGraphContext;
+    const width = speedGraph.width;
+    const height = speedGraph.height;
+    const padding = 10;
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, width, height);
+    
+    // Find max speed for scaling
+    const maxSpeed = Math.max(...speedHistory, 1);
+    
+    // Draw grid lines
+    ctx.strokeStyle = '#374151';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+        const y = padding + (height - 2 * padding) * (i / 4);
+        ctx.beginPath();
+        ctx.moveTo(padding, y);
+        ctx.lineTo(width - padding, y);
+        ctx.stroke();
+    }
+    
+    // Draw speed line
+    if (speedHistory.length > 1) {
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        
+        speedHistory.forEach((speed, index) => {
+            const x = padding + ((width - 2 * padding) / maxSpeedDataPoints) * index;
+            const y = height - padding - ((height - 2 * padding) * (speed / maxSpeed));
+            
+            if (index === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        });
+        
+        ctx.stroke();
+        
+        // Fill area under curve
+        ctx.lineTo(width - padding, height - padding);
+        ctx.lineTo(padding, height - padding);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(59, 130, 246, 0.1)';
+        ctx.fill();
+    }
+}
+
+// Update performance UI elements
+function updatePerformanceUI() {
+    // Update connection stat
+    const connectionStatEl = document.getElementById('connectionStat');
+    if (connectionStatEl) {
+        connectionStatEl.textContent = `${semaphore.currentCount}/${semaphore.maxConcurrent} Active`;
+    }
+    
+    // Update metrics
+    const avgQueueTimeEl = document.getElementById('avgQueueTime');
+    if (avgQueueTimeEl) {
+        avgQueueTimeEl.textContent = `${performanceMetrics.averageWaitTime.toFixed(1)}s`;
+    }
+    
+    const completedTodayEl = document.getElementById('completedToday');
+    if (completedTodayEl) {
+        completedTodayEl.textContent = performanceMetrics.totalDownloads;
+    }
+    
+    const failedTransfersEl = document.getElementById('failedTransfers');
+    if (failedTransfersEl) {
+        failedTransfersEl.textContent = performanceMetrics.failedTransfers;
+    }
+}
+
+// Show toast notification
+function showToast(message) {
+    const toast = document.getElementById('toast');
+    if (toast) {
+        toast.textContent = message;
+        toast.classList.add('show');
+        setTimeout(() => {
+            toast.classList.remove('show');
+        }, 3000);
+    }
+}
+
+// Initialize on load
+document.addEventListener('DOMContentLoaded', () => {
+    initMiniSpeedGraph();
+    renderAllUI();
+    
+    // Update speed graph every second
+    setInterval(() => {
+        updateMiniSpeedGraph();
+    }, 1000);
+    
+    // Update performance metrics every 2 seconds
+    setInterval(() => {
+        updatePerformanceMetrics();
+        updateConnectionProgress();
+    }, 2000);
+    
+    // Re-render UI when transfers update
+    setInterval(() => {
+        renderActiveDownloads();
+        renderActiveUploads();
+    }, 500);
+});
+
+// Helper function to format speed
+function formatSpeed(bytesPerSecond) {
+    if (bytesPerSecond === 0) return '0 KB/s';
+    const kbps = bytesPerSecond / 1024;
+    if (kbps < 1024) {
+        return `${kbps.toFixed(1)} KB/s`;
+    }
+    return `${(kbps / 1024).toFixed(2)} MB/s`;
+}
+
 // Remove file
 window.removeFile = (fileId) => {
     mySharedFiles.delete(fileId);
-    renderMyFiles();
+    renderMyFilesCompact();
+    socket.emit('file-removed', fileId);
 };
 
 // Helper functions
@@ -485,3 +1159,379 @@ function updatePeerCount(delta) {
     const current = parseInt(countEl.textContent);
     countEl.textContent = Math.max(0, current + delta);
 }
+
+// ===== NEW RENDER FUNCTIONS FOR TOP CARDS LAYOUT =====
+
+// Render active downloads in top card
+function renderActiveDownloads() {
+    if (!activeDownloadsList) return;
+    
+    const downloads = Array.from(activeTransfers.values()).filter(t => t.type === 'download');
+    
+    if (downloads.length === 0) {
+        activeDownloadsList.innerHTML = '<p class="empty-state">No active downloads</p>';
+        return;
+    }
+    
+    activeDownloadsList.innerHTML = downloads.slice(0, 1).map(transfer => `
+        <div class="active-item">
+            <div class="active-item-header">
+                <div class="active-item-name">${transfer.name}</div>
+                <div class="active-item-percentage">${transfer.progress.toFixed(0)}%</div>
+            </div>
+            <div class="progress-bar-thin">
+                <div class="progress-fill-thin" style="width: ${transfer.progress}%"></div>
+            </div>
+            <div class="active-item-meta">From: ${transfer.peerId}</div>
+        </div>
+    `).join('');
+}
+
+// Render active uploads in top cards
+function renderActiveUploads() {
+    const uploads = Array.from(activeTransfers.values()).filter(t => t.type === 'upload');
+    
+    if (activeUploadsList1) {
+        if (uploads.length >= 1) {
+            activeUploadsList1.innerHTML = `
+                <div class="active-item">
+                    <div class="active-item-header">
+                        <div class="active-item-name upload">${uploads[0].name}</div>
+                        <div class="active-item-percentage">${uploads[0].progress.toFixed(0)}%</div>
+                    </div>
+                    <div class="progress-bar-thin">
+                        <div class="progress-fill-thin upload" style="width: ${uploads[0].progress}%"></div>
+                    </div>
+                    <div class="active-item-meta">${formatSpeed(uploads[0].speed)}</div>
+                </div>
+            `;
+        } else {
+            activeUploadsList1.innerHTML = '<p class="empty-state">No active uploads</p>';
+        }
+    }
+    
+    if (activeUploadsList2) {
+        if (uploads.length >= 2) {
+            activeUploadsList2.innerHTML = `
+                <div class="active-item">
+                    <div class="active-item-header">
+                        <div class="active-item-name upload-2">${uploads[1].name}</div>
+                        <div class="active-item-percentage">${uploads[1].progress.toFixed(0)}%</div>
+                    </div>
+                    <div class="progress-bar-thin">
+                        <div class="progress-fill-thin upload-2" style="width: ${uploads[1].progress}%"></div>
+                    </div>
+                    <div class="active-item-meta">From: ${uploads[1].peerId}</div>
+                </div>
+            `;
+        } else {
+            activeUploadsList2.innerHTML = '<p class="empty-state">No active uploads</p>';
+        }
+    }
+}
+
+// Initialize and draw mini speed graph
+let miniSpeedGraphContext = null;
+
+function initMiniSpeedGraph() {
+    if (!miniSpeedGraph) return;
+    miniSpeedGraphContext = miniSpeedGraph.getContext('2d');
+    drawMiniSpeedGraph();
+}
+
+function drawMiniSpeedGraph() {
+    if (!miniSpeedGraphContext || !miniSpeedGraph) return;
+    
+    const ctx = miniSpeedGraphContext;
+    const width = miniSpeedGraph.width;
+    const height = miniSpeedGraph.height;
+    const padding = 10;
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, width, height);
+    
+    // Prepare data (last 20 points for smoother line)
+    const dataPoints = speedHistory.slice(-20);
+    if (dataPoints.length < 2) {
+        return;
+    }
+    
+    const maxSpeed = Math.max(...dataPoints, 0.1);
+    const stepX = (width - padding * 2) / (dataPoints.length - 1);
+    
+    // Draw grid lines (horizontal)
+    ctx.strokeStyle = 'rgba(100, 116, 139, 0.15)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 3; i++) {
+        const y = padding + (i * (height - padding * 2) / 3);
+        ctx.beginPath();
+        ctx.moveTo(padding, y);
+        ctx.lineTo(width - padding, y);
+        ctx.stroke();
+    }
+    
+    // Draw area fill under line
+    ctx.beginPath();
+    ctx.moveTo(padding, height - padding);
+    
+    dataPoints.forEach((speed, index) => {
+        const x = padding + index * stepX;
+        const y = height - padding - (speed / maxSpeed) * (height - padding * 2);
+        
+        if (index === 0) {
+            ctx.lineTo(x, y);
+        } else {
+            ctx.lineTo(x, y);
+        }
+    });
+    
+    ctx.lineTo(width - padding, height - padding);
+    ctx.closePath();
+    
+    // Gradient fill
+    const gradient = ctx.createLinearGradient(0, padding, 0, height - padding);
+    gradient.addColorStop(0, 'rgba(6, 182, 212, 0.3)');
+    gradient.addColorStop(1, 'rgba(59, 130, 246, 0.05)');
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    
+    // Draw line
+    ctx.beginPath();
+    dataPoints.forEach((speed, index) => {
+        const x = padding + index * stepX;
+        const y = height - padding - (speed / maxSpeed) * (height - padding * 2);
+        
+        if (index === 0) {
+            ctx.moveTo(x, y);
+        } else {
+            ctx.lineTo(x, y);
+        }
+    });
+    
+    ctx.strokeStyle = '#06b6d4';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    
+    // Draw dots on data points (every 3rd point for cleaner look)
+    dataPoints.forEach((speed, index) => {
+        if (index % 3 === 0 || index === dataPoints.length - 1) {
+            const x = padding + index * stepX;
+            const y = height - padding - (speed / maxSpeed) * (height - padding * 2);
+            
+            ctx.beginPath();
+            ctx.arc(x, y, 3, 0, Math.PI * 2);
+            ctx.fillStyle = '#06b6d4';
+            ctx.fill();
+            ctx.strokeStyle = '#1e293b';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+    });
+}
+
+function updateMiniSpeedGraph() {
+    const currentSpeed = (performanceMetrics.currentDownloadSpeed + performanceMetrics.currentUploadSpeed) / (1024 * 1024);
+    
+    speedHistory.push(currentSpeed);
+    if (speedHistory.length > 30) {
+        speedHistory.shift();
+    }
+    
+    // Update top speed display
+    if (topSpeedValue) {
+        topSpeedValue.textContent = `${currentSpeed.toFixed(1)} MB/s`;
+    }
+    
+    drawMiniSpeedGraph();
+}
+
+// Render my shared files in compact format
+function renderMyFilesCompact() {
+    if (!myFilesList) return;
+    
+    if (mySharedFiles.size === 0) {
+        myFilesList.innerHTML = '';
+        return;
+    }
+    
+    myFilesList.innerHTML = Array.from(mySharedFiles.entries()).map(([fileId, file]) => `
+        <div class="file-item-compact">
+            <div class="file-item-left">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5h-2z"/>
+                </svg>
+                <div class="file-item-info">
+                    <div class="file-item-name">${file.name}</div>
+                    <div class="file-item-meta">${formatBytes(file.size)}</div>
+                </div>
+            </div>
+            <button class="btn-danger" onclick="removeFile('${fileId}')">Remove</button>
+        </div>
+    `).join('');
+}
+
+// Render available files in compact format
+function renderAvailableFilesCompact() {
+    if (!availableFilesList) return;
+    
+    if (availableFiles.length === 0) {
+        availableFilesList.innerHTML = '<p class="empty-state">No files available</p>';
+        return;
+    }
+    
+    availableFilesList.innerHTML = availableFiles.map(file => {
+        const peerId = file.peerId ? file.peerId.substring(0, 8) : 'unknown';
+        return `
+        <div class="file-item-compact">
+            <div class="file-item-left">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5h-2z"/>
+                </svg>
+                <div class="file-item-info">
+                    <div class="file-item-name">
+                        ${file.priority ? '<span class="priority-badge">⚡ [Priority]</span> ' : ''}
+                        ${file.name}
+                    </div>
+                    <div class="file-item-meta">${formatBytes(file.size)} • From: ${peerId}</div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button 
+                    class="btn-download" 
+                    onclick='window.downloadFileWithPriority(${JSON.stringify(file)}, 0)'
+                >
+                    Download
+                </button>
+                <button 
+                    class="btn-priority" 
+                    onclick='window.downloadFileWithPriority(${JSON.stringify(file)}, 10)'
+                    title="Priority Download - Skip Queue"
+                >
+                    ⚡
+                </button>
+            </div>
+        </div>
+    `}).join('');
+}
+
+// Render transfer queues
+function renderTransferQueues() {
+    // Split queue items between two columns
+    const queueItems = downloadQueue.queue;
+    const halfPoint = Math.ceil(queueItems.length / 2);
+    
+    // Queue 1
+    if (queueList1) {
+        const queue1Items = queueItems.slice(0, halfPoint);
+        if (queue1Items.length === 0) {
+            queueList1.innerHTML = '<p class="empty-state">Queue is empty</p>';
+        } else {
+            queueList1.innerHTML = queue1Items.map((item, index) => {
+                const queueNumber = index + 1;
+                const priorityIcon = item.priority >= 10 ? '⚡' : '';
+                const waitTime = ((Date.now() - item.arrivalTime) / 1000).toFixed(1);
+                
+                return `
+                <div class="queue-item-compact ${item.status === 'running' ? 'queue-running' : ''}">
+                    <div class="queue-number">${queueNumber}</div>
+                    <div class="file-item-left">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5h-2z"/>
+                        </svg>
+                        <div class="file-item-info">
+                            <div class="file-item-name">
+                                ${priorityIcon} ${item.fileInfo.name}
+                            </div>
+                            <div class="file-item-meta">(${formatBytes(item.size)}) • Wait: ${waitTime}s</div>
+                        </div>
+                    </div>
+                    <div class="queue-item-actions">
+                        <button onclick="removeFromQueue('${item.id}')">
+                            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            `}).join('');
+        }
+    }
+    
+    // Queue 2
+    if (queueList2) {
+        const queue2Items = queueItems.slice(halfPoint);
+        if (queue2Items.length === 0) {
+            queueList2.innerHTML = '<p class="empty-state">Queue is empty</p>';
+        } else {
+            queueList2.innerHTML = queue2Items.map((item, index) => {
+                const queueNumber = halfPoint + index + 1;
+                const priorityIcon = item.priority >= 10 ? '⚡' : '';
+                const waitTime = ((Date.now() - item.arrivalTime) / 1000).toFixed(1);
+                
+                return `
+                <div class="queue-item-compact ${item.status === 'running' ? 'queue-running' : ''}">
+                    <div class="queue-number">${queueNumber}</div>
+                    <div class="file-item-left">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5h-2z"/>
+                        </svg>
+                        <div class="file-item-info">
+                            <div class="file-item-name">
+                                ${priorityIcon} ${item.fileInfo.name}
+                            </div>
+                            <div class="file-item-meta">Wait: ${waitTime}s</div>
+                        </div>
+                    </div>
+                    <button class="btn-download" onclick="removeFromQueue('${item.id}')">Remove</button>
+                </div>
+            `}).join('');
+        }
+    }
+}
+
+// Update connection progress bar
+function updateConnectionProgress() {
+    const progressEl = document.getElementById('connectionProgress');
+    const connectionStatEl = document.getElementById('connectionStat');
+    
+    if (progressEl) {
+        const percentage = (semaphore.currentCount / semaphore.maxConcurrent) * 100;
+        progressEl.style.width = `${percentage}%`;
+    }
+    
+    if (connectionStatEl) {
+        connectionStatEl.textContent = `${semaphore.currentCount}/${semaphore.maxConcurrent} Active`;
+    }
+}
+
+// Master render function - update all UI components
+function renderAllUI() {
+    renderActiveDownloads();
+    renderActiveUploads();
+    renderMyFilesCompact();
+    renderAvailableFilesCompact();
+    renderTransferQueues();
+    updateConnectionProgress();
+}
+
+window.removeFromQueue = (itemId) => {
+    downloadQueue.queue = downloadQueue.queue.filter(q => q.id !== itemId);
+    renderTransferQueues();
+};
+
+window.downloadFileWithPriority = (fileInfo, priority) => {
+    // Use the proper DownloadQueue method
+    const queueId = downloadQueue.addToQueue(fileInfo, priority);
+    
+    if (priority >= 10) {
+        showToast('Priority download queued - jumping to front!', 'info');
+    } else {
+        showToast('Download added to queue', 'info');
+    }
+    
+    // Process the queue to start download if semaphore allows
+    downloadQueue.processNextInQueue();
+};
+
