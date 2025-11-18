@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P2P File Sharing</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔗 P2P File Sharing</h1>
+            <p class="subtitle">Share files directly between browsers using WebRTC</p>
+        </header>
+
+        <div class="status-bar">
+            <div class="status-item">
+                <span class="status-label">Your ID:</span>
+                <span id="peerId" class="status-value">Connecting...</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Connected Peers:</span>
+                <span id="peerCount" class="status-value">0</span>
+            </div>
+            <div class="status-item">
+                <span class="status-indicator" id="connectionStatus"></span>
+                <span id="connectionText" class="status-value">Connecting...</span>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <!-- Upload Section -->
+            <section class="card upload-section">
+                <h2>📤 Share a File</h2>
+                <div class="upload-area" id="uploadArea">
+                    <input type="file" id="fileInput" hidden>
+                    <div class="upload-content">
+                        <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        <p class="upload-text">Click to select a file or drag & drop</p>
+                        <p class="upload-hint">Any file type, any size</p>
+                    </div>
+                </div>
+                
+                <div id="myFiles" class="file-list-container">
+                    <h3>Your Shared Files</h3>
+                    <div id="myFilesList" class="file-list"></div>
+                </div>
+            </section>
+
+            <!-- Download Section -->
+            <section class="card download-section">
+                <h2>📥 Available Files</h2>
+                <div id="availableFiles" class="file-list">
+                    <p class="empty-message">No files available. Wait for peers to share files...</p>
+                </div>
+            </section>
+        </div>
+
+        <!-- Transfer Progress Modal -->
+        <div id="progressModal" class="modal">
+            <div class="modal-content">
+                <h3 id="progressTitle">Transferring File...</h3>
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill"></div>
+                </div>
+                <p id="progressText">0%</p>
+                <p id="progressSpeed" class="progress-speed"></p>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
