@@ -121,7 +121,7 @@ class DownloadQueue {
 
 // OS Concepts: Semaphore for Connection Limiting
 class Semaphore {
-    constructor(maxConcurrent = 3) {
+    constructor(maxConcurrent = 999999) {
         this.maxConcurrent = maxConcurrent;
         this.currentCount = 0;
         this.waiting = [];
@@ -150,13 +150,13 @@ class Semaphore {
     }
     
     getUtilization() {
-        return (this.currentCount / this.maxConcurrent * 100).toFixed(1);
+        return this.currentCount > 0 ? ((this.currentCount / Math.min(this.maxConcurrent, 10)) * 100).toFixed(1) : '0';
     }
 }
 
 // Initialize OS components
 const downloadQueue = new DownloadQueue();
-const semaphore = new Semaphore(3); // Max 3 concurrent downloads
+const semaphore = new Semaphore(999999); // Unlimited concurrent downloads
 
 // Performance Metrics - Application Level Monitoring
 const performanceMetrics = {
@@ -327,8 +327,11 @@ socket.on('ice-candidate', async ({ candidate, fromPeerId }) => {
 });
 
 // File upload handling
-uploadArea.addEventListener('click', () => {
-    fileInput.click();
+uploadArea.addEventListener('click', (e) => {
+    // Prevent double-triggering from the button inside
+    if (!e.target.closest('.btn-upload')) {
+        fileInput.click();
+    }
 });
 
 fileInput.addEventListener('change', (e) => {
@@ -459,8 +462,7 @@ function setupDataChannel(dataChannel, peerId, isReceiver = false) {
 }
 
 // Download file from peer
-// Download file with priority
-window.downloadFile = (fileId, priority = 5) => {
+window.downloadFile = (fileId, priority = 1) => {
     const file = availableFiles.find(f => f.id === fileId);
     if (!file) {
         showToast('File not found');
@@ -473,6 +475,24 @@ window.downloadFile = (fileId, priority = 5) => {
     // Try to start download if semaphore allows
     downloadQueue.processNextInQueue();
 };
+
+// Actual download function from queue
+async function downloadFileFromQueue(queueItem) {
+    try {
+        downloadQueue.startDownload(queueItem.id);
+        performanceMetrics.totalConnectionAttempts++;
+        const connectionStartTime = Date.now();
+        
+        console.log('Starting download from queue:', queueItem.fileInfo.name);
+        await performDownload(queueItem.fileInfo, queueItem.id, connectionStartTime);
+    } catch (error) {
+        console.error('Download failed:', error);
+        performanceMetrics.failedTransfers++;
+        showToast('Download failed: ' + error.message, 'error');
+        downloadQueue.completeDownload(queueItem.id);
+        semaphore.release();
+    }
+}
 
 // Send file through data channel
 async function sendFile(dataChannel, file) {
@@ -541,41 +561,6 @@ async function sendFile(dataChannel, file) {
     };
     
     readChunk();
-}
-
-// Handle download button click
-window.downloadFile = async (fileId, priority = 1) => {
-    const fileInfo = availableFiles.find(f => f.id === fileId);
-    if (!fileInfo) return;
-    
-    // Add to download queue
-    const queueId = downloadQueue.addToQueue(fileInfo, priority);
-    
-    // If semaphore allows, start immediately
-    if (semaphore.canAcquire()) {
-        semaphore.acquire();
-        const queueItem = downloadQueue.queue.find(q => q.id === queueId);
-        if (queueItem) {
-            downloadQueue.startDownload(queueId);
-            await performDownload(fileInfo, queueId);
-        }
-    }
-};
-
-// Actual download function
-async function downloadFileFromQueue(queueItem) {
-    try {
-        downloadQueue.startDownload(queueItem.id);
-        performanceMetrics.totalConnectionAttempts++;
-        const connectionStartTime = Date.now();
-        
-        console.log('Starting download from queue:', queueItem.fileInfo.name);
-        await performDownload(queueItem.fileInfo, queueItem.id, connectionStartTime);
-    } catch (error) {
-        console.error('Download failed:', error);
-        downloadQueue.completeDownload(queueItem.id);
-        semaphore.release();
-    }
 }
 
 async function performDownload(fileInfo, queueId, connectionStartTime = Date.now()) {
@@ -710,6 +695,7 @@ async function performDownload(fileInfo, queueId, connectionStartTime = Date.now
     dataChannel.onerror = (error) => {
         console.error('Data channel error:', error);
         performanceMetrics.failedTransfers++;
+        showToast('Download error: Connection failed', 'error');
         removeActiveTransfer(transferId);
         downloadQueue.completeDownload(queueId);
         semaphore.release();
@@ -1121,12 +1107,12 @@ function updateStatsDisplay() {
         currentSpeedEl.textContent = `${speed.toFixed(2)} MB/s`;
     }
     if (activeConnectionsEl) {
-        activeConnectionsEl.textContent = `${semaphore.currentCount}/${semaphore.maxConcurrent}`;
+        activeConnectionsEl.textContent = semaphore.currentCount;
     }
 }
 
 // Show toast notification
-function showToast(message) {
+function showToast(message, type = 'info') {
     const toast = document.getElementById('toast');
     const messageEl = toast?.querySelector('.toast-message');
     if (toast && messageEl) {
@@ -1537,12 +1523,14 @@ function updateConnectionProgress() {
     const connectionStatEl = document.getElementById('connectionStat');
     
     if (progressEl) {
-        const percentage = (semaphore.currentCount / semaphore.maxConcurrent) * 100;
+        // Show progress based on actual connections, capped at visual limit
+        const visualMax = 10;
+        const percentage = Math.min((semaphore.currentCount / visualMax) * 100, 100);
         progressEl.style.width = `${percentage}%`;
     }
     
     if (connectionStatEl) {
-        connectionStatEl.textContent = `${semaphore.currentCount}/${semaphore.maxConcurrent} Active`;
+        connectionStatEl.textContent = `${semaphore.currentCount} Active`;
     }
 }
 
@@ -1562,13 +1550,15 @@ window.removeFromQueue = (itemId) => {
 };
 
 window.downloadFileWithPriority = (fileInfo, priority) => {
+    console.log('downloadFileWithPriority called:', fileInfo.name, 'priority:', priority);
+    
     // Use the proper DownloadQueue method
     const queueId = downloadQueue.addToQueue(fileInfo, priority);
     
     if (priority >= 10) {
-        showToast('Priority download queued - jumping to front!', 'info');
+        showToast('Priority download queued - jumping to front!');
     } else {
-        showToast('Download added to queue', 'info');
+        showToast('Download added to queue');
     }
     
     // Process the queue to start download if semaphore allows
