@@ -1,395 +1,1037 @@
-# P2P File Transfer - UI Component Explanation
-## Why Every Element Exists & What It Demonstrates
+# P2P File Transfer System - Complete Documentation
+## Secure, Private, OS-Focused Implementation
+
+**Team Members:**
+- **AP (Aadi Pandey)** - Project Lead, UI/UX & Integration
+- **RD** - Backend Architecture & WebRTC Implementation
+- **AB** - Queue Management & Scheduling Algorithms
+- **VU** - Performance Monitoring & Testing
+
+**Project Repository:** github.com/aadipandey223/MiniUi_2  
+**Live Demo:** [Railway Deployment URL]
 
 ---
 
-## TOP BAR
+# TABLE OF CONTENTS
 
-### 1. App Title "P2P Transfer"
-**Why:** Immediate identification of application  
-**Purpose:** User knows what they're using  
-**OS Concept:** N/A (branding)
-
-### 2. Search Box (Center)
-**Why:** Quick file filtering across large file lists  
-**Purpose:** Find specific files from multiple peers  
-**OS Concept:** **File system search/indexing**  
-**Real-world:** Like `grep` command in Unix - search through data efficiently  
-**Teacher Question:** "Why search?" → Answer: "When 50 peers share 200 files, manual scrolling is inefficient. Search implements O(n) filtering algorithm."
-
-### 3. Green Dot + "Connected" Status
-**Why:** Real-time connection state visibility  
-**Purpose:** User knows if P2P network is active  
-**OS Concept:** **Process state indicator** (Running/Stopped)  
-**Real-world:** Like `ps` command showing process status  
-**Teacher Question:** "Why show connection status?" → Answer: "P2P requires active network. If disconnected, user can't share/download. Like checking if network interface is UP in OS."
-
-### 4. "6 Peers" Counter
-**Why:** Shows network size and availability  
-**Purpose:** User knows how many sources available for files  
-**OS Concept:** **Resource availability** - more peers = more resources  
-**Real-world:** Like distributed systems showing node count  
-**Teacher Question:** "Why peer count matters?" → Answer: "In distributed systems, more nodes = better fault tolerance and load distribution. One peer offline? 5 others still have the file."
+1. [Project Overview](#project-overview)
+2. [Core Features](#core-features)
+3. [OS Concepts Demonstrated](#os-concepts)
+4. [Privacy & Security Features](#privacy-security)
+5. [Revolutionary Cryptography](#cryptography)
+6. [User Identity System](#user-identity)
+7. [Technical Architecture](#architecture)
+8. [Implementation Guide](#implementation)
+9. [UI/UX Design](#ui-design)
+10. [Market Differentiation](#differentiation)
+11. [Demo Script & Questions](#demo)
+12. [Future Enhancements](#future)
 
 ---
 
-## TOP SECTION - 4 CARDS
+<a name="project-overview"></a>
+# 1. PROJECT OVERVIEW
 
-### CARD 1: Active Downloads
-**Why:** Visual separation of incoming transfers  
-**Purpose:** Monitor what you're receiving  
-**OS Concept:** **Process monitoring** - incoming I/O operations  
-**Contains:**
-- Progress bar (0-100%)
-- Peer ID (source identification)
-- Speed (MB/s)
-- Percentage complete
+## What It Is
+A **peer-to-peer file sharing web application** that enables direct browser-to-browser file transfers without central server storage, featuring military-grade encryption, private rooms, and advanced OS concepts demonstration.
 
-**Teacher Questions:**
-- **"Why separate downloads from uploads?"**  
-  → "Same reason OS separates read/write operations. Different resources used - download uses network receive buffer, upload uses send buffer. Monitoring separately helps identify bottlenecks."
+## Key Innovation
+Unlike traditional P2P systems, our implementation uses **Triple-Layer Encryption** with quantum-resistant elements and anonymous identity verification - features not found in any commercial product.
 
-- **"Why show peer ID?"**  
-  → "Source identification. If transfer fails, we know which peer had issue. Like process ID (PID) in OS - tracks who's doing what."
-
-- **"Why progress bar?"**  
-  → "User feedback on long-running operations. OS principle: never leave user guessing. Progress = (chunks_received / total_chunks) * 100"
-
-### CARD 2 & 3: Active Uploads (Two Separate Cards)
-**Why TWO upload cards:** Demonstrates multiple concurrent operations  
-**Purpose:** Show simultaneous file serving to different peers  
-**OS Concept:** **Concurrent process execution** - multiple uploads in parallel  
-
-**Why separate cards instead of one list:**
-- Visual emphasis on parallelism
-- Each upload is independent process
-- Easier to spot individual transfer issues
-- Shows **multi-threading** concept visually
-
-**Teacher Questions:**
-- **"Why not combine all uploads in one card?"**  
-  → "To emphasize parallel execution. In OS, each upload is separate thread. Showing them separately demonstrates concurrent operations clearly - visual representation of multi-threading."
-
-- **"What if 5 uploads? Only 2 cards?"**  
-  → "Shows limitation of concurrent operations. Semaphore limits to 3 total connections. This UI design itself teaches resource constraints - can't show infinite cards because system can't handle infinite connections."
-
-### CARD 4: Network Speed Graph
-**Why:** Real-time performance visualization  
-**Purpose:** Monitor system throughput over time  
-**OS Concept:** **Performance monitoring** - like `top`, `htop` in Linux  
-**Graph shows:** Last 8-10 data points of transfer speed
-
-**Teacher Questions:**
-- **"Why graph instead of just number?"**  
-  → "Trends matter. Single number = current state. Graph = historical performance. Helps identify: network congestion, peer quality, bandwidth throttling. Like CPU usage graph in Task Manager."
-
-- **"Why update every 500ms?"**  
-  → "Balance between accuracy and overhead. Too fast (100ms) = CPU waste on rendering. Too slow (5s) = miss important changes. 500ms = sweet spot for real-time feel without overhead."
-
-- **"What does spike in graph mean?"**  
-  → "Network burst. Peer sent multiple chunks quickly. Helps diagnose: good peer = consistent line, bad peer = spiky graph (congestion)."
+## Core Philosophy
+- **Privacy First:** Files never touch the server
+- **OS Focused:** Every feature demonstrates OS concepts
+- **Market Leading:** Security features beyond commercial solutions
+- **Production Ready:** Deployable, scalable, maintainable
 
 ---
 
-## MIDDLE SECTION - 3 COLUMNS
+<a name="core-features"></a>
+# 2. CORE FEATURES
 
-### LEFT: Your Shared Files
+## 2.1 Basic P2P Transfer
+- Direct browser-to-browser file sharing
+- WebRTC DataChannel for transfer
+- No server storage required
+- File chunking (16KB blocks)
+- Real-time progress tracking
 
-#### Drag & Drop Zone
-**Why:** Intuitive file upload  
-**Purpose:** Add files to share with network  
-**OS Concept:** **User input handling** - file system interaction  
+## 2.2 Private Room System
+- Link-based room access
+- Room isolation (complete peer separation)
+- Password protection
+- Temporary/permanent rooms
+- QR code sharing for mobile
 
-**Teacher Questions:**
-- **"Why drag-drop instead of just button?"**  
-  → "Better UX, but also demonstrates event-driven programming. OS must handle: drag events, file descriptor access, memory allocation for file data. Shows OS I/O handling."
+## 2.3 Advanced Queue Management
+- Semaphore-based connection limiting (max 3)
+- FCFS (First Come First Serve) scheduling
+- Priority queue override
+- Auto-processing on slot availability
+- Queue wait time tracking
 
-- **"What happens when file dropped?"**  
-  ```
-  1. OS creates file descriptor
-  2. Browser reads file metadata (name, size, type)
-  3. File stored in browser memory (RAM)
-  4. Shared with peers via WebRTC data channel
-  ```
+## 2.4 Performance Monitoring
+- Real-time network speed graphs
+- Connection pool visualization
+- Throughput calculation
+- Memory usage tracking
+- Success/failure statistics
 
-#### File List with Size
-**Why:** Transparency of what you're sharing  
-**Purpose:** Manage shared resources  
-**OS Concept:** **Resource inventory** - like `df` showing disk usage  
+## 2.5 User Identity System (NEW)
+- Customizable display names
+- Anonymous identity hashing
+- Profile customization
+- Peer recognition across sessions
+- Cool name effects and animations
 
-**Teacher Question:**
-- **"Why show file size?"**  
-  → "Resource awareness. Large file = more memory used, longer transfer time. Like OS showing memory usage - user needs to know resource consumption."
-
-#### Remove Button
-**Why:** Resource deallocation  
-**Purpose:** Free up memory when file no longer needed  
-**OS Concept:** **Memory management** - garbage collection  
-
-**Teacher Question:**
-- **"What happens when removed?"**  
-  → "File removed from shared list, memory freed (garbage collected), peers notified via signaling channel. Like `free()` in C - deallocate memory."
-
----
-
-### CENTER: Available Files
-
-#### Search Box
-**Why:** Efficient lookup in large dataset  
-**Purpose:** Find specific files quickly  
-**OS Concept:** **File system indexing** - O(n) search algorithm  
-
-#### File List with Download Buttons
-**Why:** Show available resources across network  
-**Purpose:** Request file from peer  
-**OS Concept:** **Resource discovery** in distributed system  
-
-**Each file shows:**
-- **Filename:** Resource identifier
-- **Peer name:** Source location
-- **Priority flag (⚡):** Urgent resource marker
-
-**Teacher Questions:**
-- **"How do you know what files peers have?"**  
-  → "When peer connects, they send metadata (file list) via signaling. Like distributed database - each node advertises its resources."
-
-- **"What's priority flag for?"**  
-  → "Scheduling optimization. Priority files skip queue (like priority interrupt in OS). Use case: critical document needed urgently."
-
-- **"Why show peer name?"**  
-  → "Source transparency. If 3 peers have same file, you can choose: closest peer (low latency), fastest peer (high bandwidth), or most reliable peer."
+## 2.6 Revolutionary Cryptography (NEW)
+- Triple-layer encryption
+- Quantum-resistant algorithms
+- Perfect forward secrecy
+- Zero-knowledge proof verification
+- Blockchain-inspired key distribution
 
 ---
 
-### RIGHT: Performance Dashboard
+<a name="os-concepts"></a>
+# 3. OS CONCEPTS DEMONSTRATED
 
-This is the **most important section for OS demonstration**.
+## 3.1 Process Management
+**Implementation:** Node.js event loop
+- Single-threaded async I/O
+- Multiple concurrent transfers
+- Process state tracking (running/queued/completed)
 
-#### Connections Bar (5/7 Active)
-**Why:** **Semaphore visualization**  
-**Purpose:** Show resource constraint enforcement  
-**OS Concept:** **Semaphore** - limit concurrent access to resource  
+**Demo:** Show `ps aux | grep node` to display actual OS process
 
-**This is core OS concept:**
-```
-Semaphore S = 3;  // Max 3 connections
-wait(S);          // Decrement when transfer starts
-signal(S);        // Increment when transfer completes
+## 3.2 Semaphores
+**Implementation:** Connection limiting
+```javascript
+let semaphore = 3; // Max concurrent connections
+
+function acquireSemaphore() {
+  if (semaphore > 0) {
+    semaphore--;
+    return true;
+  }
+  return false; // Queue the request
+}
+
+function releaseSemaphore() {
+  semaphore++;
+  processQueue(); // Start next in queue
+}
 ```
 
-**Teacher Questions:**
-- **"Why limit to 3?"**  
-  → "Prevent resource exhaustion. Each connection uses: memory, CPU, network bandwidth. Unlimited connections = browser crash. Like OS limiting max open file descriptors."
+**Visual:** UI shows "2/3 Active" - real semaphore state
 
-- **"What happens at 3/3?"**  
-  → "New requests wait in queue. Semaphore blocks. When one completes, semaphore signals, next in queue starts. Classic producer-consumer problem."
+## 3.3 Scheduling Algorithms
+**FCFS (First Come First Serve):**
+```javascript
+queue.push(file); // Add to end
+const next = queue.shift(); // Take from front
+```
 
-- **"Why not 10 or 100?"**  
-  → "Browser limitations. Each WebRTC connection = significant overhead. 3 is optimal for stability. Like OS setting `ulimit` - balance between capability and safety."
+**Priority Scheduling:**
+```javascript
+if (file.priority) {
+  queue.unshift(file); // Jump to front
+} else {
+  queue.push(file); // Normal queue
+}
+```
 
-#### Network Speed (Upload ↑ / Download ↓)
-**Why:** Real-time throughput monitoring  
-**Purpose:** Diagnose performance issues  
-**OS Concept:** **I/O bandwidth monitoring**  
+**Metrics Tracked:**
+- Waiting time: Time in queue
+- Turnaround time: Request to completion
+- Response time: Request to first byte
+- Throughput: Files per minute
 
-**Teacher Question:**
-- **"Why separate upload/download speed?"**  
-  → "Different resources. Network cards have separate rx/tx buffers. Upload doesn't affect download speed (full-duplex). Like monitoring disk read vs write separately."
+## 3.4 Inter-Process Communication
+**WebSocket (Signaling):**
+- TCP-based persistent connection
+- Socket.io for bidirectional communication
+- OS manages TCP buffers
 
-#### Average Queue Time
-**Why:** **Scheduling metric** - measures queue efficiency  
-**Purpose:** Know how long files wait before transfer starts  
-**OS Concept:** **Waiting time** in CPU scheduling  
+**WebRTC DataChannel (Transfer):**
+- UDP/TCP hybrid
+- OS handles packet routing
+- SCTP protocol for reliability
 
-**Formula:** `(sum of all wait times) / queue length`  
-**Real calculation:** `(File1_wait + File2_wait + ...) / total_files`
+**Demo:** Show `netstat -ano | grep 3000` for actual OS sockets
 
-**Teacher Questions:**
-- **"Why measure queue time?"**  
-  → "Scheduling performance indicator. Long wait time = system overloaded or poor scheduling. Goal: minimize average wait time. Same metric used in CPU scheduling algorithms."
+## 3.5 Memory Management
+**File Chunking:**
+```javascript
+const CHUNK_SIZE = 16384; // 16KB
+const chunks = [];
 
-- **"How to improve queue time?"**  
-  → "Options: 1) Increase semaphore limit (more concurrent), 2) Better scheduling (SJF instead of FCFS), 3) Reject low-priority requests when busy."
+// Read file in chunks (don't load all in RAM)
+for (let offset = 0; offset < file.size; offset += CHUNK_SIZE) {
+  const chunk = file.slice(offset, offset + CHUNK_SIZE);
+  chunks.push(chunk);
+}
+```
 
-#### Throughput (5 files/min)
-**Why:** System efficiency metric  
-**Purpose:** Measure how many files successfully transferred per unit time  
-**OS Concept:** **Throughput** - primary performance metric  
+**Garbage Collection:**
+- Chunks cleared after assembly
+- File objects dereferenced
+- Browser GC reclaims memory
 
-**Teacher Question:**
-- **"Why throughput matters?"**  
-  → "Core performance metric. High throughput = efficient system. Like transactions per second in database. Formula: completed_transfers / time_period."
+**Demo:** Show Chrome DevTools Memory Profiler
 
-#### Memory Used
-**Why:** Resource consumption tracking  
-**Purpose:** Prevent browser crash from memory overflow  
-**OS Concept:** **Memory management** - track heap usage  
+## 3.6 File System Interaction
+**System Calls Used:**
+- `stat()` - Get file metadata (size, modified time)
+- `open()` - Get file descriptor
+- `read()` - Load file contents
+- `close()` - Release file descriptor
 
-**Teacher Questions:**
-- **"How calculate memory used?"**  
-  → "Sum of all file sizes in memory: `shared_files.size + active_transfers.size`. Like `free -m` command showing used RAM."
-
-- **"What if memory full?"**  
-  → "Reject new uploads. Like OS with full RAM - must free memory before allocating more. Could implement LRU cache - remove oldest files first."
-
-#### Completed Today / Failed
-**Why:** Success rate tracking  
-**Purpose:** System reliability metric  
-**OS Concept:** **Process completion tracking**  
-
-**Teacher Question:**
-- **"Why track failures?"**  
-  → "Fault diagnosis. High failure rate = network issues, bad peers, or bugs. Like OS tracking segmentation faults. Helps identify: which peer is unreliable, network congestion patterns."
-
----
-
-## BOTTOM SECTION - 2 TRANSFER QUEUES
-
-### Why TWO Queue Sections?
-**Purpose:** Demonstrate different queue types  
-**OS Concept:** **Multi-level queue scheduling**  
-
-**Queue 1:** Your upload queue (outgoing)  
-**Queue 2:** Your download queue (incoming)  
-
-**Separation benefits:**
-1. Different priorities (uploads vs downloads)
-2. Independent scheduling
-3. Separate resource pools
-4. Clearer visualization
-
-### Queue Display Format
-
-#### Numbered List (1, 2, 3, 4...)
-**Why:** **FCFS (First Come First Serve) visualization**  
-**Purpose:** Show execution order  
-**OS Concept:** **FCFS Scheduling** - process order matters  
-
-**Teacher Questions:**
-- **"Why number the queue?"**  
-  → "Shows execution order. Number 1 = next to execute. Classic FCFS queue. Like print queue - first submitted, first printed."
-
-- **"Can order change?"**  
-  → "Yes, if priority. Priority items jump to position 1. Demonstrates priority scheduling vs FCFS."
-
-#### Priority Flag (⚡)
-**Why:** Show priority scheduling  
-**Purpose:** Identify urgent files that skip queue  
-**OS Concept:** **Priority Scheduling** - override FCFS  
-
-**Teacher Question:**
-- **"How does priority work?"**  
-  ```
-  Normal: queue.push(file)      // Add to end
-  Priority: queue.unshift(file) // Add to front
-  ```
-  "Like priority interrupt in OS - preempts normal execution."
-
-#### File Name + Size
-**Why:** Identify what's waiting  
-**Purpose:** User knows what they're waiting for  
-**OS Concept:** **Process information** - like `ps aux` output  
-
-#### Upload/Download Buttons
-**Why:** Manual control over queue  
-**Purpose:** User can prioritize or remove items  
-**OS Concept:** **Process control** - kill, pause, prioritize  
+**Demo:** Show in browser console during file drop
 
 ---
 
-## TOAST NOTIFICATION (Bottom Right)
+<a name="privacy-security"></a>
+# 4. PRIVACY & SECURITY FEATURES
 
-### "File received from Alice" Popup
-**Why:** Asynchronous event notification  
-**Purpose:** Alert user of completed background operation  
-**OS Concept:** **Interrupt handling** - notify about asynchronous events  
+## 4.1 Private Room System
 
-**Teacher Questions:**
-- **"Why popup instead of just updating list?"**  
-  → "User might be in different section. Popup = interrupt - demands attention. Like OS interrupt - CPU must acknowledge. Non-intrusive notification of important event."
+### Architecture
+```
+Global Network
+├── Room: abc123 (Isolated)
+│   ├── Alice
+│   ├── Bob
+│   └── Can only see each other's files
+│
+├── Room: xyz789 (Isolated)
+│   ├── Charlie
+│   └── David
+│
+└── Rooms cannot see each other
+```
 
-- **"Why auto-dismiss after 3s?"**  
-  → "Balance between visibility and annoyance. Too long = clutters UI. Too short = user misses it. 3s = enough to read, not blocking."
+### Room Creation Flow
+1. User clicks "Create Private Room"
+2. System generates unique Room ID (9 characters)
+3. Optional password setting
+4. Shareable link generated: `app.com/room/abc123`
+5. QR code generated for mobile sharing
+
+### Room Joining Flow
+1. User receives link
+2. Clicks link → Auto-redirects to room
+3. If password protected → Prompt for password
+4. If correct → Join room and see peer files
+5. If wrong → Access denied
+
+### Room Features
+- **Expiration:** Set room lifetime (1hr, 24hr, 7days, forever)
+- **Max Peers:** Limit room size
+- **Access Log:** Track who joined/left
+- **Room Admin:** Creator has special controls
+
+## 4.2 Password Protection
+
+### Two-Layer Security
+**Layer 1: Room Password**
+- Set during room creation
+- Required to join room
+- Can be changed by admin
+- SHA-256 hashed on server
+
+**Layer 2: File Password (Optional)**
+- Per-file encryption password
+- Even room members need password to decrypt
+- Use case: Extra sensitive files
+
+### Password Verification
+```javascript
+// Server-side
+const hashedPassword = crypto
+  .createHash('sha256')
+  .update(password)
+  .digest('hex');
+
+if (hashedPassword === room.passwordHash) {
+  socket.join(roomId);
+} else {
+  socket.emit('access-denied');
+}
+```
+
+## 4.3 File-Level Permissions
+
+### Selective Sharing
+```
+Upload File: report.pdf
+├── Share with: ☑ Alice
+├──             ☑ Bob
+└──             ☐ Charlie (cannot download)
+```
+
+### Access Control List (ACL)
+```javascript
+{
+  fileId: 'file123',
+  name: 'report.pdf',
+  owner: 'Alice',
+  permissions: {
+    'Bob': ['read', 'download'],
+    'Alice': ['read', 'download', 'delete'],
+    'Charlie': ['read'] // Can see, can't download
+  }
+}
+```
+
+## 4.4 End-to-End Encryption
+
+### Standard Implementation (AES-256)
+```javascript
+// Generate room key when creating room
+const roomKey = CryptoJS.lib.WordArray.random(256/8);
+
+// Encrypt file chunk
+const encrypted = CryptoJS.AES.encrypt(chunk, roomKey);
+
+// Send encrypted chunk
+dataChannel.send(encrypted.toString());
+
+// Receiver decrypts
+const decrypted = CryptoJS.AES.decrypt(encrypted, roomKey);
+```
+
+**Benefit:** Even if intercepted, data is unreadable
 
 ---
 
-## OVERALL UI DESIGN PHILOSOPHY
+<a name="cryptography"></a>
+# 5. REVOLUTIONARY CRYPTOGRAPHY (UNIQUE FEATURES)
 
-### Why Dark Theme?
-**Reason:** Professional, technical aesthetic  
-**Psychology:** Developers, engineers prefer dark themes  
-**Practical:** Less eye strain for long demo sessions  
-**Message:** "This is a serious technical project, not a toy"
+## 5.1 Triple-Layer Encryption System
 
-### Why Three-Panel Layout?
-**Reason:** Information hierarchy  
-- Left: Your resources (input)
-- Center: Active operations (main focus)
-- Right: System metrics (monitoring)
+### Why Triple-Layer?
+**Problem with single encryption:**
+- If one key compromised → All data exposed
+- No protection against man-in-the-middle during key exchange
+- Server can potentially decrypt if it knows the key
 
-**OS Parallel:** Like htop/top layout - processes left, stats right, actions center
+**Our Solution:** Three independent encryption layers
 
-### Why Real-Time Updates?
-**Reason:** Show that this is a **live system**, not a mockup  
-**OS Concept:** Demonstrates event-driven architecture  
-**Impact:** Teacher sees actual progress, speed changes, queue movement
+### Layer 1: Session Encryption (Ephemeral)
+**Algorithm:** ChaCha20-Poly1305
+**Key Lifetime:** Valid for current session only
+**Purpose:** Protect data in transit
 
-### Why Color Coding?
-- **Blue:** Downloads (receiving)
-- **Orange/Green:** Uploads (sending)
-- **Yellow:** Priority (urgent)
-- **Red:** Failed (error)
-- **Green:** Success (completed)
+```javascript
+// Generate unique session key per transfer
+const sessionKey = sodium.crypto_secretbox_keygen();
 
-**OS Parallel:** Like terminal colors - errors red, success green, info blue
+// Encrypt chunk
+const nonce = sodium.randombytes_buf(sodium.crypto_secretbox_NONCEBYTES);
+const encrypted = sodium.crypto_secretbox_easy(chunk, nonce, sessionKey);
+```
+
+**Why ChaCha20?**
+- Faster than AES on mobile devices
+- Resistant to timing attacks
+- Used by Google, Cloudflare
+
+### Layer 2: Room Encryption (Shared Secret)
+**Algorithm:** AES-256-GCM
+**Key Lifetime:** Room duration
+**Purpose:** Isolate rooms cryptographically
+
+```javascript
+// Derive room key from room ID + password
+const roomKey = await crypto.subtle.deriveKey(
+  {
+    name: 'PBKDF2',
+    salt: roomId,
+    iterations: 100000,
+    hash: 'SHA-256'
+  },
+  password,
+  { name: 'AES-GCM', length: 256 },
+  false,
+  ['encrypt', 'decrypt']
+);
+```
+
+**Why AES-GCM?**
+- Authenticated encryption (detects tampering)
+- Industry standard
+- Hardware acceleration on modern CPUs
+
+### Layer 3: Identity Encryption (Personal)
+**Algorithm:** RSA-4096 + ECC (Elliptic Curve)
+**Key Lifetime:** User's device
+**Purpose:** Verify sender identity, sign chunks
+
+```javascript
+// Generate user keypair (stored in browser)
+const keypair = await crypto.subtle.generateKey(
+  {
+    name: 'RSA-OAEP',
+    modulusLength: 4096,
+    publicExponent: new Uint8Array([1, 0, 1]),
+    hash: 'SHA-256'
+  },
+  true,
+  ['encrypt', 'decrypt']
+);
+
+// Sign chunk with private key
+const signature = await crypto.subtle.sign(
+  'RSA-PSS',
+  privateKey,
+  chunk
+);
+```
+
+**Why RSA-4096?**
+- Quantum-resistant (for now)
+- Asymmetric = sender can't decrypt what they send
+- Future-proof key size
+
+### Complete Encryption Flow
+```
+Original File Chunk
+    ↓
+[Layer 3] Sign with user's private key (RSA-4096)
+    ↓
+[Layer 2] Encrypt with room key (AES-256-GCM)
+    ↓
+[Layer 1] Encrypt with session key (ChaCha20)
+    ↓
+Send over WebRTC DataChannel
+    ↓
+[Layer 1] Decrypt with session key
+    ↓
+[Layer 2] Decrypt with room key
+    ↓
+[Layer 3] Verify signature with user's public key
+    ↓
+Original Chunk Restored
+```
+
+**Result:** 
+- Even if attacker breaks one layer → Still 2 layers protecting data
+- Even if server is compromised → Cannot decrypt (no private keys stored)
+- Even if session key leaks → Room key still protects
+
+## 5.2 Quantum-Resistant Key Exchange
+
+### The Quantum Threat
+**Problem:** Future quantum computers will break RSA, ECC
+**Timeline:** Estimated 10-15 years
+**Impact:** All current encryption becomes vulnerable
+
+### Our Solution: Hybrid Approach
+
+**Classic + Post-Quantum:**
+```javascript
+// Use both classic and quantum-resistant algorithms
+const classicKey = await generateRSAKey(); // For now
+const quantumKey = await generateKyberKey(); // For future
+
+// Combine keys using XOR
+const hybridKey = classicKey.xor(quantumKey);
+```
+
+**Post-Quantum Algorithms We Use:**
+
+1. **Kyber (Key Exchange)**
+   - NIST selected standard
+   - Based on lattice cryptography
+   - Quantum computer cannot break
+
+2. **Dilithium (Digital Signatures)**
+   - Quantum-resistant signatures
+   - Verifies sender identity
+
+**Implementation:**
+```javascript
+// Generate Kyber keypair
+import { kyber512 } from '@noble/post-quantum/kyber';
+
+const aliceKeys = kyber512.keygen();
+const bobKeys = kyber512.keygen();
+
+// Alice generates shared secret
+const ciphertext = kyber512.encapsulate(bobKeys.publicKey);
+
+// Bob decrypts shared secret
+const sharedSecret = kyber512.decapsulate(ciphertext, bobKeys.secretKey);
+
+// Both now have same secret, quantum-safe!
+```
+
+**Why This Matters for Your Project:**
+- **Unique Feature:** No other P2P app uses quantum-resistant crypto
+- **Future-Proof:** Safe even after quantum computers exist
+- **Academic Value:** Demonstrates cutting-edge cryptography
+- **Impressive:** Shows advanced security knowledge
+
+## 5.3 Perfect Forward Secrecy (PFS)
+
+### What is PFS?
+**Problem:** If encryption key compromised → All past messages readable
+**Solution:** Generate new key for every session
+
+### Implementation
+```javascript
+// Every transfer gets unique ephemeral key
+function startTransfer(file) {
+  const ephemeralKey = generateRandomKey();
+  
+  // Use this key only for this transfer
+  const encrypted = encrypt(file, ephemeralKey);
+  
+  // After transfer, destroy key
+  ephemeralKey = null; // Garbage collected
+}
+```
+
+**Benefit:**
+- Compromise today's key → Yesterday's transfers still safe
+- Each file transfer = independent encryption
+- Attacker must break each transfer individually
+
+## 5.4 Zero-Knowledge Proof (Room Password Verification)
+
+### Problem with Traditional Password Check
+**Bad Approach:**
+```javascript
+// User sends password to server
+socket.emit('join-room', roomId, password);
+
+// Server checks
+if (password === correctPassword) {
+  allowJoin();
+}
+```
+**Issue:** Server knows your password!
+
+### Zero-Knowledge Approach
+**User proves they know password WITHOUT revealing it**
+
+```javascript
+// Server sends challenge
+socket.on('password-challenge', (challenge) => {
+  
+  // User computes hash using password + challenge
+  const proof = hash(password + challenge);
+  
+  // Send proof (not password!)
+  socket.emit('password-proof', proof);
+});
+
+// Server verifies proof
+const expectedProof = hash(correctPassword + challenge);
+if (proof === expectedProof) {
+  allowJoin(); // User knows password, but we never saw it!
+}
+```
+
+**Benefit:**
+- Server never stores actual password
+- Network sniffing reveals nothing
+- Even server admin can't know passwords
+
+## 5.5 Blockchain-Inspired File Integrity
+
+### File Chunk Verification
+**Problem:** How to ensure file wasn't tampered during transfer?
+
+**Solution:** Hash chain (like blockchain)
+
+```javascript
+// Sender creates hash chain
+const chunks = splitFile(file);
+const hashes = [];
+
+// Each chunk hash includes previous hash (chain)
+for (let i = 0; i < chunks.length; i++) {
+  const prevHash = i > 0 ? hashes[i-1] : '0';
+  const chunkHash = hash(chunks[i] + prevHash);
+  hashes.push(chunkHash);
+}
+
+// Send hash chain to receiver first
+socket.emit('hash-chain', hashes);
+
+// Receiver verifies each chunk
+for (let i = 0; i < receivedChunks.length; i++) {
+  const prevHash = i > 0 ? hashes[i-1] : '0';
+  const computedHash = hash(receivedChunks[i] + prevHash);
+  
+  if (computedHash !== hashes[i]) {
+    throw new Error('Chunk tampered! Reject file.');
+  }
+}
+```
+
+**Benefit:**
+- If single chunk modified → Entire chain invalidates
+- Cannot replace chunks without detection
+- Cryptographic proof of file integrity
+
+## 5.6 Steganography Mode (Hidden Files)
+
+### What is Steganography?
+Hiding secret data inside innocent-looking data
+
+### Our Implementation
+**Feature:** Hide encrypted file inside an image
+
+```javascript
+// Hide file inside image
+function hideFileInImage(file, coverImage) {
+  // Encrypt file first
+  const encrypted = encrypt(file);
+  
+  // Convert to binary
+  const bits = toBinary(encrypted);
+  
+  // Modify least significant bits of image pixels
+  const pixels = coverImage.getImageData();
+  
+  for (let i = 0; i < bits.length; i++) {
+    const pixel = pixels[i];
+    
+    // Modify last bit of red channel
+    pixel.r = (pixel.r & 0xFE) | bits[i];
+  }
+  
+  return modifiedImage; // Looks normal, contains hidden file!
+}
+```
+
+**Use Case:**
+- Send sensitive file disguised as vacation photo
+- Looks like innocent image
+- Only recipient with key can extract hidden file
+
+**Why This Is Unique:**
+- No commercial P2P app has this
+- Combines cryptography + steganography
+- Demonstrates advanced security concepts
 
 ---
 
-## KEY TAKEAWAY FOR PRESENTATION
+<a name="user-identity"></a>
+# 6. USER IDENTITY SYSTEM
 
-Every UI element serves **three purposes:**
+## 6.1 Anonymous Identity with Custom Names
 
-1. **Functional:** Helps user accomplish task
-2. **Educational:** Demonstrates OS concept
-3. **Visual:** Makes concept tangible and observable
+### Problem
+- Default peer IDs: "peer_A3F2", "peer_B7D9" (ugly, unmemorable)
+- No way to recognize who you're sharing with
+- Privacy concern: Don't want to use real name
 
-**Example: Progress Bar**
-- Functional: Shows download completion
-- Educational: Demonstrates process state transition
-- Visual: Makes abstract "bytes received" concrete
+### Solution: Customizable Anonymous Identity
 
-**When teacher asks "Why is X in the UI?"**
+### Features
 
-**Template Answer:**
-"[Element X] serves two purposes:
-1. **User:** [What user learns/does with it]
-2. **OS Concept:** [Which OS principle it demonstrates]
-3. **Real-world:** [Production system equivalent]"
+#### 1. Display Name Customization
+**UI Element:** Clickable name in top bar
 
-**Example:**
-"The semaphore counter (2/3 Active) serves three purposes:
-1. **User:** Shows how many slots available before files queue
-2. **OS Concept:** Visualizes semaphore resource limiting
-3. **Real-world:** Like Apache's MaxClients - limit concurrent connections to prevent overload"
+```
+┌────────────────────────────┐
+│ 👤 TechWizard   [Edit]     │
+└────────────────────────────┘
+```
+
+**Click to Edit:**
+```
+┌─────────────────────────────┐
+│  Your Display Name:         │
+│  [TechWizard_________]      │
+│                             │
+│  Choose Style:              │
+│  ⚡ Electric                │
+│  🔥 Fire                    │
+│  🌊 Water                   │
+│  ✨ Sparkle                 │
+│                             │
+│  Preview: ⚡TechWizard⚡    │
+│                             │
+│  [Cancel]  [Confirm]        │
+└─────────────────────────────┘
+```
+
+#### 2. Name Effects (Cool Animations)
+
+**Electric Style:**
+```css
+.name-electric {
+  animation: electric-glow 2s infinite;
+  text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff;
+  color: #00ffff;
+}
+
+@keyframes electric-glow {
+  0%, 100% { text-shadow: 0 0 10px #00ffff; }
+  50% { text-shadow: 0 0 30px #00ffff, 0 0 40px #00ffff; }
+}
+```
+
+**Fire Style:**
+```css
+.name-fire {
+  background: linear-gradient(45deg, #ff0000, #ff7700, #ffff00);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: fire-flicker 1.5s infinite;
+}
+```
+
+**Sparkle Style:**
+```css
+.name-sparkle::before,
+.name-sparkle::after {
+  content: '✨';
+  animation: sparkle 2s infinite;
+}
+
+@keyframes sparkle {
+  0%, 100% { opacity: 0; transform: scale(0); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+```
+
+**Water Style:**
+```css
+.name-water {
+  color: #00aaff;
+  animation: wave 3s ease-in-out infinite;
+}
+
+@keyframes wave {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+```
+
+#### 3. Name Validation Rules
+- **Length:** 3-20 characters
+- **Allowed:** Letters, numbers, underscores
+- **Blocked:** Profanity, offensive terms
+- **Unique:** In current room (optional)
+
+#### 4. Anonymous Hash ID
+
+**Problem:** Two users pick same name
+**Solution:** Unique hash appended
+
+```javascript
+// Generate unique identifier
+function generateUserHash(displayName) {
+  const timestamp = Date.now();
+  const random = Math.random();
+  const combined = displayName + timestamp + random;
+  
+  // First 6 chars of hash
+  const hash = crypto
+    .createHash('sha256')
+    .update(combined)
+    .digest('hex')
+    .substring(0, 6);
+  
+  return hash;
+}
+
+// Display format
+const displayName = "TechWizard";
+const hash = "a3f2b1";
+const fullIdentity = `${displayName}#${hash}`;
+// Shows as: TechWizard#a3f2b1
+```
+
+**Benefits:**
+- Unique even if same display name
+- Anonymous (hash can't be traced)
+- Memorable (name) + Unique (hash)
+
+#### 5. Peer Recognition Across Sessions
+
+**Store Identity in Browser:**
+```javascript
+// Save to localStorage
+localStorage.setItem('userIdentity', JSON.stringify({
+  displayName: 'TechWizard',
+  hash: 'a3f2b1',
+  style: 'electric',
+  createdAt: Date.now()
+}));
+
+// Load on next visit
+const savedIdentity = JSON.parse(localStorage.getItem('userIdentity'));
+```
+
+**Benefit:** Same identity when you return
+
+## 6.2 Identity UI Components
+
+### Top Bar Display
+```
+┌──────────────────────────────────────┐
+│ P22 Transfer                         │
+│                                      │
+│ 👤 ⚡TechWizard#a3f2b1⚡  [Edit]    │
+│    └─ Click to customize             │
+│                                      │
+│ 🟢 Connected  |  👥 6 peers          │
+└──────────────────────────────────────┘
+```
+
+### Peer List Display
+```
+┌────────────────────────────────┐
+│  Peers in Room (6):            │
+├────────────────────────────────┤
+│  👤 ⚡TechWizard#a3f2b1⚡ (You) │
+│  👤 🔥CodeMaster#b7d932🔥       │
+│  👤 🌊DataKing#f3a821🌊         │
+│  👤 ✨ByteNinja#c92ef1✨        │
+│  👤 Anonymous#d83af2            │
+│  👤 Guest_4821                  │
+└────────────────────────────────┘
+```
+
+### File Transfer Display
+```
+Downloading: report.pdf
+From: 🔥CodeMaster#b7d932🔥
+Progress: ████████░░ 75%
+Speed: 2.3 MB/s
+```
+
+### Activity Log
+```
+Recent Activity:
+• 🌊DataKing joined the room (2 min ago)
+• ⚡TechWizard uploaded file.pdf (5 min ago)
+• 🔥CodeMaster downloaded data.xlsx (10 min ago)
+• ✨ByteNinja left the room (15 min ago)
+```
+
+## 6.3 Advanced Identity Features
+
+### 1. Avatar Generation
+**Based on username hash:**
+```javascript
+// Generate unique avatar from hash
+function generateAvatar(hash) {
+  // Use hash to pick colors, shapes
+  const colors = generateColorPalette(hash);
+  const shapes = generateGeometricPattern(hash);
+  
+  // Create SVG avatar
+  return createSVGAvatar(colors, shapes);
+}
+```
+
+**Result:** Each user gets unique geometric avatar
+
+### 2. Reputation System (Optional)
+Track user behavior:
+```javascript
+{
+  userId: 'TechWizard#a3f2b1',
+  stats: {
+    filesShared: 45,
+    successfulTransfers: 42,
+    failedTransfers: 3,
+    reputation: 0.93, // 93% success rate
+    trustScore: 'High'
+  }
+}
+```
+
+**Display:**
+```
+👤 ⚡TechWizard#a3f2b1⚡
+   ⭐⭐⭐⭐⭐ (93% success rate)
+   45 files shared
+```
+
+### 3. Status Messages
+**Like Discord/Slack:**
+```
+👤 ⚡TechWizard#a3f2b1⚡
+   💬 "Sharing project files"
+   🟢 Active
+```
+
+### 4. Name History
+**Track name changes:**
+```javascript
+nameHistory: [
+  { name: 'TechWizard', from: '2024-01-15', to: '2024-02-10' },
+  { name: 'CodeMaster', from: '2024-02-10', to: null }
+]
+```
+
+**Display:**
+```
+👤 🔥CodeMaster#b7d932🔥
+   Previously: TechWizard
+```
 
 ---
 
-## SUMMARY: UI TO OS CONCEPT MAPPING
+<a name="architecture"></a>
+# 7. TECHNICAL ARCHITECTURE
 
-| UI Element | OS Concept |
-|------------|-----------|
-| Connection status | Process state (running/stopped) |
-| Peer count | Distributed system nodes |
-| Progress bars | Process completion percentage |
-| Active transfers | Running processes |
-| Download queue | FCFS scheduling |
-| Priority flag | Priority scheduling |
-| Semaphore counter | Resource limitation |
-| Speed graph | Performance monitoring |
-| Queue wait time | Scheduling efficiency |
-| Throughput | System performance |
-| Memory used | Heap management |
-| Completed/Failed | Process success tracking |
-| Toast notification | Interrupt/signal handling |
+## 7.1 System Components
 
-**Every pixel has a purpose. Nothing is decorative - everything teaches.**
+### Frontend (React + Tailwind CSS)
+```
+public/
+├── index.html          # Main HTML file
+├── app.js             # React application
+│   ├── Components
+│   │   ├── TopBar (Connection status, peers, user identity)
+│   │   ├── ActiveTransfers (Progress bars, speeds)
+│   │   ├── Queue (FCFS + Priority visualization)
+│   │   ├── FileList (Drag-drop, shared files)
+│   │   ├── PerformanceDashboard (Metrics, graphs)
+│   │   ├── RoomManager (Create/join rooms)
+│   │   └── IdentityEditor (Name customization)
+│   ├── Hooks
+│   │   ├── useWebRTC (P2P connections)
+│   │   ├── useSocket (Signaling)
+│   │   ├── useEncryption (Triple-layer crypto)
+│   │   └── useQueue (Scheduling algorithms)
+│   └── Utils
+│       ├── crypto.js (Encryption functions)
+│       ├── chunking.js (File splitting)
+│       └── hashing.js (Identity, integrity)
+└── styles.css          # Dark theme, animations
+```
+
+### Backend (Node.js + Express + Socket.io)
+```
+server/
+├── server.js           # Main server file
+├── routes/
+│   ├── rooms.js       # Room management API
+│   ├── auth.js        # Password verification
+│   └── files.js       # File metadata
+├── services/
+│   ├── signaling.js   # WebRTC signaling
+│   ├── roomService.js # Room CRUD operations
+│   ├── cryptoService.js # Key generation, verification
+│   └── queueService.js # Server-side queue coordination
+├── models/
+│   ├── Room.js        # Room schema
+│   ├── User.js        # User identity
+│   └── Transfer.js    # Transfer logs
+└── middleware/
+    ├── auth.js        # Password middleware
+    └── rateLimit.js   # DDoS protection
+```
+
+## 7.2 Data Flow
+
+### Complete Transfer Flow
+```
+1. User A creates private room
+   ↓
+2. System generates Room ID + encryption keys
+   ↓
+3. User A shares link with User B
+   ↓
+4. User B opens link → Joins room
+   ↓
+5. WebSocket connection established
+   ↓
+6. Exchange of:
+   - Public keys (RSA-4096)
+   - Room key (AES-256)
+   - Session key (ChaCha20)
+   ↓
+7. User A selects file → Drag-drops
+   ↓
+8. File chunked into 16KB pieces
+   ↓
+9. Each chunk:
+   - Signed with A's private key
+   - Encrypted with room key
+   - Encrypted with session key
+   ↓
+10. WebRTC DataChannel established
+    ↓
+11. Encrypted chunks sent directly A → B
+    ↓
+12. User B receives chunks:
+    - Decrypts with session key
+    - Decrypts with room key
+    - Verifies signature with A's public key
+    ↓
+13. Chunks reassembled → Original file
+    ↓
+14. Hash verification (blockchain-style chain)
+    ↓
+15. Success! File downloaded securely
+```
+
+## 7.3 Database Schema
+
+### Rooms Collection
+```javascript
+{
+  roomId: 'abc123xyz',
+  createdBy: 'TechWizard#a3f2b1',
+  createdAt: ISODate('2024-01-15T10:30:00Z'),
+  expiresAt: ISODate('2024-01-16T10:30:00Z'), // 24 hours
+  passwordHash: 'sha256hash...',
+  encryptionKey: 'encrypted_key_blob',
+  maxPeers: 10,
+  currentPeers: ['TechWizard#a3f2b1', 'CodeMaster#b7d932'],
+  settings: {
+    allowGuestAccess: false,
+    requirePassword: true,
+    enableE2E: true,
+    maxFileSize: 5368709120 // 5GB
+  },
+  activityLog: [
+    { timestamp: ISODate(), user: 'TechWizard#a3f2b1', action: 'joined' },
+    { timestamp: ISODate(), user: 'CodeMaster#b7d932', action: 'uploaded', file: 'report.pdf' }
+  ]
+}
+```
+
+### Users Collection
+```javascript
+{
+  userId: 'TechWizard#a3f2b1',
+  displayName: 'TechWizard',
+  hash: 'a3f2b1',
+  publicKey: 'RSA_public_key_pem',
+  style: 'electric',
+  createdAt: ISODate(),
+  stats: {
+    filesShared: 45,
+    filesReceived: 32,
+    totalBytesTransferred: 8589934592, // 8GB
+    successRate: 0.93
+  },
+  preferences: {
+    theme: 'dark',
+    notifications: true,
+    defaultRoomExpiry: 86400000 // 24 hours in ms
+  }
+}
+```
+
+### Transfers Collection (Logs)
+```javascript
+{
+  transferId: 'transfer_123',
+  roomId: 'abc123xyz',
+  fileName: 'report.pdf',
+  fileSize: 2359296, // bytes
+  sender: 'TechWizard#a3f2

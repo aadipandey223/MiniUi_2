@@ -228,6 +228,7 @@ socket.on('connect', () => {
     const textEl = document.getElementById('connectionText');
     if (statusEl) statusEl.classList.add('connected');
     if (textEl) textEl.textContent = 'Connected';
+    updateStatsDisplay();
 });
 
 socket.on('peers-list', (peers) => {
@@ -1073,13 +1074,18 @@ function updatePerformanceUI() {
     // Update connection stat
     const connectionStatEl = document.getElementById('connectionStat');
     if (connectionStatEl) {
-        connectionStatEl.textContent = `${semaphore.currentCount}/${semaphore.maxConcurrent} Active`;
+        connectionStatEl.textContent = `${semaphore.currentCount}/${semaphore.maxConcurrent}`;
     }
     
     // Update metrics
     const avgQueueTimeEl = document.getElementById('avgQueueTime');
     if (avgQueueTimeEl) {
         avgQueueTimeEl.textContent = `${performanceMetrics.averageWaitTime.toFixed(1)}s`;
+    }
+    
+    const queueWaitingEl = document.getElementById('queueWaiting');
+    if (queueWaitingEl) {
+        queueWaitingEl.textContent = downloadQueue.queue.filter(q => q.status === 'waiting').length;
     }
     
     const completedTodayEl = document.getElementById('completedToday');
@@ -1091,13 +1097,40 @@ function updatePerformanceUI() {
     if (failedTransfersEl) {
         failedTransfersEl.textContent = performanceMetrics.failedTransfers;
     }
+    
+    const topSpeedEl = document.getElementById('topSpeedValue');
+    if (topSpeedEl) {
+        topSpeedEl.textContent = `${(performanceMetrics.peakDownloadSpeed / (1024 * 1024)).toFixed(2)} MB/s`;
+    }
+    
+    // Update stats display
+    updateStatsDisplay();
+}
+
+// Update stats display in hero section
+function updateStatsDisplay() {
+    const totalDownloadsEl = document.getElementById('totalDownloads');
+    const totalUploadsEl = document.getElementById('totalUploads');
+    const currentSpeedEl = document.getElementById('currentSpeedStat');
+    const activeConnectionsEl = document.getElementById('activeConnections');
+    
+    if (totalDownloadsEl) totalDownloadsEl.textContent = performanceMetrics.totalDownloads;
+    if (totalUploadsEl) totalUploadsEl.textContent = performanceMetrics.totalUploads;
+    if (currentSpeedEl) {
+        const speed = (performanceMetrics.currentDownloadSpeed + performanceMetrics.currentUploadSpeed) / (1024 * 1024);
+        currentSpeedEl.textContent = `${speed.toFixed(2)} MB/s`;
+    }
+    if (activeConnectionsEl) {
+        activeConnectionsEl.textContent = `${semaphore.currentCount}/${semaphore.maxConcurrent}`;
+    }
 }
 
 // Show toast notification
 function showToast(message) {
     const toast = document.getElementById('toast');
-    if (toast) {
-        toast.textContent = message;
+    const messageEl = toast?.querySelector('.toast-message');
+    if (toast && messageEl) {
+        messageEl.textContent = message;
         toast.classList.add('show');
         setTimeout(() => {
             toast.classList.remove('show');
@@ -1164,70 +1197,72 @@ function updatePeerCount(delta) {
 
 // Render active downloads in top card
 function renderActiveDownloads() {
-    if (!activeDownloadsList) return;
+    const section = document.getElementById('activeTransfersSection');
+    const listEl = document.querySelector('#activeDownloadsList .transfer-list');
+    if (!listEl) return;
     
     const downloads = Array.from(activeTransfers.values()).filter(t => t.type === 'download');
     
+    // Show/hide section based on active transfers
+    if (section) {
+        section.style.display = (downloads.length > 0 || Array.from(activeTransfers.values()).filter(t => t.type === 'upload').length > 0) ? 'block' : 'none';
+    }
+    
     if (downloads.length === 0) {
-        activeDownloadsList.innerHTML = '<p class="empty-state">No active downloads</p>';
+        listEl.innerHTML = '';
         return;
     }
     
-    activeDownloadsList.innerHTML = downloads.slice(0, 1).map(transfer => `
-        <div class="active-item">
-            <div class="active-item-header">
-                <div class="active-item-name">${transfer.name}</div>
-                <div class="active-item-percentage">${transfer.progress.toFixed(0)}%</div>
+    listEl.innerHTML = downloads.map(transfer => `
+        <div class="transfer-item">
+            <div class="transfer-header">
+                <div class="transfer-info">
+                    <h4>${transfer.name}</h4>
+                    <div class="transfer-peer">From: ${transfer.peerId}</div>
+                </div>
+                <div class="transfer-stats">
+                    <div class="transfer-percentage">${transfer.progress.toFixed(0)}%</div>
+                    <div class="transfer-speed">${formatSpeed(transfer.speed)}</div>
+                </div>
             </div>
-            <div class="progress-bar-thin">
-                <div class="progress-fill-thin" style="width: ${transfer.progress}%"></div>
+            <div class="transfer-progress">
+                <div class="transfer-progress-fill" style="width: ${transfer.progress}%"></div>
             </div>
-            <div class="active-item-meta">From: ${transfer.peerId}</div>
+            <div class="transfer-size">${formatBytes(transfer.transferred)} / ${formatBytes(transfer.total)}</div>
         </div>
     `).join('');
 }
 
 // Render active uploads in top cards
 function renderActiveUploads() {
+    const listEl = document.querySelector('#activeUploadsList1 .transfer-list');
+    if (!listEl) return;
+    
     const uploads = Array.from(activeTransfers.values()).filter(t => t.type === 'upload');
     
-    if (activeUploadsList1) {
-        if (uploads.length >= 1) {
-            activeUploadsList1.innerHTML = `
-                <div class="active-item">
-                    <div class="active-item-header">
-                        <div class="active-item-name upload">${uploads[0].name}</div>
-                        <div class="active-item-percentage">${uploads[0].progress.toFixed(0)}%</div>
-                    </div>
-                    <div class="progress-bar-thin">
-                        <div class="progress-fill-thin upload" style="width: ${uploads[0].progress}%"></div>
-                    </div>
-                    <div class="active-item-meta">${formatSpeed(uploads[0].speed)}</div>
-                </div>
-            `;
-        } else {
-            activeUploadsList1.innerHTML = '<p class="empty-state">No active uploads</p>';
-        }
+    if (uploads.length === 0) {
+        listEl.innerHTML = '';
+        return;
     }
     
-    if (activeUploadsList2) {
-        if (uploads.length >= 2) {
-            activeUploadsList2.innerHTML = `
-                <div class="active-item">
-                    <div class="active-item-header">
-                        <div class="active-item-name upload-2">${uploads[1].name}</div>
-                        <div class="active-item-percentage">${uploads[1].progress.toFixed(0)}%</div>
-                    </div>
-                    <div class="progress-bar-thin">
-                        <div class="progress-fill-thin upload-2" style="width: ${uploads[1].progress}%"></div>
-                    </div>
-                    <div class="active-item-meta">From: ${uploads[1].peerId}</div>
+    listEl.innerHTML = uploads.map(transfer => `
+        <div class="transfer-item">
+            <div class="transfer-header">
+                <div class="transfer-info">
+                    <h4>${transfer.name}</h4>
+                    <div class="transfer-peer">To: ${transfer.peerId}</div>
                 </div>
-            `;
-        } else {
-            activeUploadsList2.innerHTML = '<p class="empty-state">No active uploads</p>';
-        }
-    }
+                <div class="transfer-stats">
+                    <div class="transfer-percentage">${transfer.progress.toFixed(0)}%</div>
+                    <div class="transfer-speed">${formatSpeed(transfer.speed)}</div>
+                </div>
+            </div>
+            <div class="transfer-progress">
+                <div class="transfer-progress-fill upload" style="width: ${transfer.progress}%"></div>
+            </div>
+            <div class="transfer-size">${formatBytes(transfer.transferred)} / ${formatBytes(transfer.total)}</div>
+        </div>
+    `).join('');
 }
 
 // Initialize and draw mini speed graph
@@ -1352,7 +1387,7 @@ function renderMyFilesCompact() {
     if (!myFilesList) return;
     
     if (mySharedFiles.size === 0) {
-        myFilesList.innerHTML = '';
+        myFilesList.innerHTML = '<div class="empty-state-container"><svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><p class="empty-state-text">No shared files</p><p class="empty-state-subtext">Upload files to share with peers</p></div>';
         return;
     }
     
@@ -1377,7 +1412,7 @@ function renderAvailableFilesCompact() {
     if (!availableFilesList) return;
     
     if (availableFiles.length === 0) {
-        availableFilesList.innerHTML = '<p class="empty-state">No files available</p>';
+        availableFilesList.innerHTML = '<div class="empty-state-container"><svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><p class="empty-state-text">No files available</p><p class="empty-state-subtext">Waiting for peers to share files</p></div>';
         return;
     }
     
@@ -1418,6 +1453,11 @@ function renderAvailableFilesCompact() {
 
 // Render transfer queues
 function renderTransferQueues() {
+    const queueSection = document.getElementById('queueSection');
+    if (queueSection) {
+        queueSection.style.display = downloadQueue.queue.length > 0 ? 'block' : 'none';
+    }
+    
     // Split queue items between two columns
     const queueItems = downloadQueue.queue;
     const halfPoint = Math.ceil(queueItems.length / 2);
