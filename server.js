@@ -3,7 +3,6 @@ const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
 const path = require('path');
-const { v4: uuidv4 } = require('uuid');
 const { RoomCrypto, CryptoUtils } = require('./utils/crypto');
 
 const app = express();
