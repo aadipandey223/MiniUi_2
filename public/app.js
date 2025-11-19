@@ -1182,13 +1182,31 @@ uploadArea.addEventListener('click', (e) => {
 
 fileInput.addEventListener('change', (e) => {
     const files = Array.from(e.target.files);
+    const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB limit (increased from 500MB)
+    
     if (files.length > 0) {
         console.log(`📁 Selected ${files.length} file(s) for upload`);
+        
+        let validFiles = 0;
+        let skippedFiles = 0;
+        
         files.forEach((file, index) => {
-            console.log(`   ${index + 1}. ${file.name} (${formatBytes(file.size)})`);
-            shareFile(file);
+            if (file.size > MAX_FILE_SIZE) {
+                console.log(`   ❌ Skipped (too large): ${file.name} (${formatBytes(file.size)}) - Max: 2GB`);
+                skippedFiles++;
+            } else {
+                console.log(`   ✅ ${index + 1}. ${file.name} (${formatBytes(file.size)})`);
+                shareFile(file);
+                validFiles++;
+            }
         });
-        showToast(`Sharing ${files.length} file(s)...`);
+        
+        if (validFiles > 0) {
+            showToast(`✅ Sharing ${validFiles} file(s)...`, 'success');
+        }
+        if (skippedFiles > 0) {
+            showToast(`⚠️ ${skippedFiles} file(s) skipped (max 2GB per file)`, 'warning');
+        }
     }
     fileInput.value = '';
 });
@@ -1207,7 +1225,7 @@ uploadArea.addEventListener('drop', (e) => {
     e.preventDefault();
     uploadArea.classList.remove('drag-over');
     
-    const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 MB
+    const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB limit (increased from 500MB)
     const files = Array.from(e.dataTransfer.files);
     
     if (files.length > 0) {
@@ -1462,34 +1480,37 @@ async function sendFile(dataChannel, file) {
                     
                     const packagedData = JSON.stringify(encryptedPackage);
                     
-                    // Check buffer before sending
-                    if (dataChannel.bufferedAmount > chunkSize * 4) {
+                    // Check buffer before sending - wait if buffer is full
+                    if (dataChannel.bufferedAmount > chunkSize * 2) {
+                        // Wait for buffer to drain
                         setTimeout(() => {
                             dataChannel.send(packagedData);
                             offset += chunkSize;
                             processNextChunk();
-                        }, 10);
-                        return;
+                        }, 50);
+                        return; // Don't continue below
                     }
                     
                     dataChannel.send(packagedData);
+                    offset += chunkSize;
+                    processNextChunk();
                 } else {
                     // Global mode: Send unencrypted for speed (WebRTC is already encrypted via DTLS)
-                    // Check buffer before sending
-                    if (dataChannel.bufferedAmount > chunkSize * 4) {
+                    // Check buffer before sending - wait if buffer is full
+                    if (dataChannel.bufferedAmount > chunkSize * 2) {
+                        // Wait for buffer to drain
                         setTimeout(() => {
                             dataChannel.send(chunkData);
                             offset += chunkSize;
                             processNextChunk();
-                        }, 10);
-                        return;
+                        }, 50);
+                        return; // Don't continue below
                     }
                     
                     dataChannel.send(chunkData);
+                    offset += chunkSize;
+                    processNextChunk();
                 }
-                
-                offset += chunkSize;
-                processNextChunk();
                 
             } catch (error) {
                 console.error('❌ Encryption error:', error);
@@ -3239,18 +3260,26 @@ window.removeFromQueue = (itemId) => {
 };
 
 window.downloadFileWithPriority = (fileInfo, priority) => {
-    console.log('downloadFileWithPriority called:', fileInfo.name, 'priority:', priority);
+    console.log('🔽 downloadFileWithPriority called:', fileInfo.name, 'priority:', priority);
+    console.log('   File info:', fileInfo);
+    console.log('   Semaphore status:', {
+        current: semaphore.currentCount,
+        max: semaphore.maxConcurrent,
+        canAcquire: semaphore.canAcquire()
+    });
     
     // Use the proper DownloadQueue method
     const queueId = downloadQueue.addToQueue(fileInfo, priority);
+    console.log('   Added to queue with ID:', queueId);
     
     if (priority >= 10) {
-        showToast('Priority download queued - jumping to front!');
+        showToast('⚡ Priority download queued - jumping to front!', 'success');
     } else {
-        showToast('Download added to queue');
+        showToast('📥 Download added to queue', 'success');
     }
     
     // Process the queue to start download if semaphore allows
+    console.log('   Processing queue...');
     downloadQueue.processNextInQueue();
 };
 
