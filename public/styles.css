@@ -2996,6 +2996,58 @@ body.incognito-mode .copy-tooltip::after {
 
 /* ===== MOBILE INCOGNITO MODE FIXES ===== */
 @media (max-width: 768px) {
+    /* Fix text overflow on mobile */
+    .upload-title {
+        font-size: 1.25rem;
+        word-wrap: break-word;
+    }
+    
+    .upload-desc {
+        font-size: 0.875rem;
+    }
+    
+    .upload-limit {
+        font-size: 0.75rem;
+        display: block;
+        text-align: center;
+    }
+    
+    /* Fix file name overflow */
+    .file-item-name {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        word-break: break-all;
+    }
+    
+    .file-item-meta {
+        font-size: 0.75rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    /* Better section spacing */
+    .section {
+        margin-bottom: 1rem;
+    }
+    
+    .section-title {
+        font-size: 1.125rem;
+    }
+    
+    /* Compact upload zone for mobile */
+    .upload-zone {
+        padding: 1.5rem 1rem;
+        min-height: auto;
+    }
+    
+    .upload-icon-wrapper {
+        width: 56px;
+        height: 56px;
+        margin-bottom: 1rem;
+    }
+    
     body.incognito-mode .top-nav {
         background: rgba(26, 26, 26, 0.95);
         backdrop-filter: blur(30px);
@@ -3062,6 +3114,71 @@ body.incognito-mode .copy-tooltip::after {
 }
 
 @media (max-width: 480px) {
+    /* Even more compact for small phones */
+    .upload-zone {
+        padding: 1.25rem 0.75rem;
+    }
+    
+    .upload-title {
+        font-size: 1.125rem;
+    }
+    
+    .upload-desc {
+        font-size: 0.8125rem;
+    }
+    
+    .upload-limit {
+        font-size: 0.6875rem;
+    }
+    
+    .btn-upload {
+        width: 100%;
+        max-width: 280px;
+    }
+    
+    /* Compact file items */
+    .file-item-compact {
+        padding: 0.875rem;
+        gap: 0.75rem;
+    }
+    
+    .file-item-name {
+        font-size: 0.875rem;
+        max-width: 180px;
+    }
+    
+    .file-item-meta {
+        font-size: 0.6875rem;
+    }
+    
+    /* Smaller section titles */
+    .section-title {
+        font-size: 1rem;
+    }
+    
+    .section-title svg {
+        width: 16px;
+        height: 16px;
+    }
+    
+    /* Compact empty state */
+    .empty-state-container {
+        padding: 2rem 1rem;
+    }
+    
+    .empty-state-container svg {
+        width: 48px;
+        height: 48px;
+    }
+    
+    .empty-state-text {
+        font-size: 1rem;
+    }
+    
+    .empty-state-subtext {
+        font-size: 0.8125rem;
+    }
+    
     body.incognito-mode .top-nav {
         padding: 1rem;
         background: rgba(26, 26, 26, 0.98);
@@ -3161,5 +3278,35 @@ body.incognito-mode .copy-tooltip::after {
     /* Stack buttons vertically if needed */
     .file-actions {
         flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    
+    /* Make buttons full width on very small screens */
+    .file-actions .btn-download,
+    .file-actions .btn-danger {
+        flex: 1;
+        min-width: 100px;
+    }
+    
+    /* Better checkbox sizing */
+    .file-checkbox {
+        width: 20px;
+        height: 20px;
+    }
+    
+    /* Compact header actions */
+    .header-actions {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    
+    .upload-options-compact {
+        flex: 1;
+        min-width: 120px;
+    }
+    
+    .btn-remove-all {
+        flex: 1;
+        min-width: 100px;
     }
 }
