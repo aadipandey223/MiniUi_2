@@ -933,11 +933,17 @@ socket.on('peers-list', (peers) => {
 });
 
 socket.on('peer-joined', (peer) => {
-    updatePeerCount(1);
+    // Only update peer count in global mode (room mode uses peer-joined-room)
+    if (!currentRoomId) {
+        updatePeerCount(1);
+    }
 });
 
 socket.on('peer-left', (peer) => {
-    updatePeerCount(-1);
+    // Only update peer count in global mode (room mode uses peer-left-room)
+    if (!currentRoomId) {
+        updatePeerCount(-1);
+    }
     // Clean up connections
     if (peerConnections.has(peer.id)) {
         peerConnections.get(peer.id).close();
@@ -1425,7 +1431,7 @@ async function downloadFileFromQueue(queueItem) {
     }
 }
 
-// Send file through data channel with TRIPLE-LAYER ENCRYPTION
+// Send file through data channel (unencrypted - WebRTC DTLS provides encryption)
 async function sendFile(dataChannel, file) {
     // Adaptive chunk size based on file size (smaller chunks for large files = more stable)
     let chunkSize = 262144; // 256KB default
@@ -1440,29 +1446,24 @@ async function sendFile(dataChannel, file) {
     
     const startTime = Date.now();
     
-    console.log('🔐 Starting encrypted file transfer:', file.name);
+    console.log('📤 Starting file transfer:', file.name, currentRoomId ? '(Room Mode)' : '(Global Mode)');
     
-    // LAYER 1: Generate ephemeral session key
-    const sessionKey = await SessionCrypto.generateSessionKey();
-    const sessionKeyExported = await SessionCrypto.exportKey(sessionKey);
-    
-    // Send metadata with session key
+    // Send metadata (same for both global and room mode)
     const metadata = {
         name: file.name,
         size: file.size,
         type: file.type,
-        encrypted: true,
-        sessionKey: CryptoUtils.arrayBufferToBase64(sessionKeyExported),
+        encrypted: false,
         roomId: currentRoomId || null
     };
     
     dataChannel.send(JSON.stringify(metadata));
-    console.log('📤 Sent metadata with session key');
+    console.log('📤 Sent metadata');
     
     // Track buffer size
     performanceMetrics.bufferSizeMB = chunkSize / (1024 * 1024);
     
-    // Send file in chunks with triple-layer encryption
+    // Send file in chunks (unencrypted for both modes - WebRTC DTLS provides encryption)
     const readChunk = () => {
         const slice = file.slice(offset, offset + chunkSize);
         const reader = new FileReader();
@@ -1471,51 +1472,22 @@ async function sendFile(dataChannel, file) {
             try {
                 let chunkData = e.target.result;
                 
-                // OPTIMIZED: Only encrypt in rooms, skip for global (faster)
-                if (currentRoomId && currentRoomKey) {
-                    // Room mode: Use room encryption only (faster than triple-layer)
-                    const roomEncrypted = await RoomCrypto.encrypt(chunkData, currentRoomKey);
-                    
-                    const encryptedPackage = {
-                        data: CryptoUtils.uint8ArrayToBase64(roomEncrypted.encrypted),
-                        roomIv: CryptoUtils.uint8ArrayToBase64(roomEncrypted.iv),
-                        encrypted: true,
-                        chunkIndex: Math.floor(offset / chunkSize)
-                    };
-                    
-                    const packagedData = JSON.stringify(encryptedPackage);
-                    
-                    // Check buffer before sending - wait if buffer is full
-                    if (dataChannel.bufferedAmount > chunkSize) {
-                        // Wait for buffer to drain (shorter wait for better flow)
-                        setTimeout(() => {
-                            dataChannel.send(packagedData);
-                            offset += chunkSize;
-                            processNextChunk();
-                        }, 20);
-                        return; // Don't continue below
-                    }
-                    
-                    dataChannel.send(packagedData);
-                    offset += chunkSize;
-                    processNextChunk();
-                } else {
-                    // Global mode: Send unencrypted for speed (WebRTC is already encrypted via DTLS)
-                    // Check buffer before sending - wait if buffer is full
-                    if (dataChannel.bufferedAmount > chunkSize) {
-                        // Wait for buffer to drain (shorter wait for better flow)
-                        setTimeout(() => {
-                            dataChannel.send(chunkData);
-                            offset += chunkSize;
-                            processNextChunk();
-                        }, 20);
-                        return; // Don't continue below
-                    }
-                    
-                    dataChannel.send(chunkData);
-                    offset += chunkSize;
-                    processNextChunk();
+                // Send unencrypted for speed (WebRTC is already encrypted via DTLS)
+                // Same code for both global and room mode
+                // Check buffer before sending - wait if buffer is full
+                if (dataChannel.bufferedAmount > chunkSize) {
+                    // Wait for buffer to drain (shorter wait for better flow)
+                    setTimeout(() => {
+                        dataChannel.send(chunkData);
+                        offset += chunkSize;
+                        processNextChunk();
+                    }, 20);
+                    return; // Don't continue below
                 }
+                
+                dataChannel.send(chunkData);
+                offset += chunkSize;
+                processNextChunk()
                 
             } catch (error) {
                 console.error('❌ Encryption error:', error);
@@ -1670,114 +1642,6 @@ async function performDownload(fileInfo, queueId, connectionStartTime = Date.now
                     const totalConnectionTime = performanceMetrics.averageConnectionTime * performanceMetrics.totalDownloads;
                     performanceMetrics.averageConnectionTime = (totalConnectionTime + connectionTime) / (performanceMetrics.totalDownloads + 1);
                     
-                } else if (parsed.data && parsed.roomIv) {
-                    // This is a room-encrypted chunk (private mode)
-                    if (firstChunkTime === 0) {
-                        firstChunkTime = Date.now();
-                        const queueItem = downloadQueue.queue.find(q => q.id === queueId);
-                        if (queueItem) {
-                            queueItem.responseTime = firstChunkTime - startTime;
-                        }
-                    }
-                    
-                    try {
-                        // Decrypt the chunk with room encryption
-                        let encryptedChunk = CryptoUtils.base64ToUint8Array(parsed.data);
-                        const roomIv = CryptoUtils.base64ToUint8Array(parsed.roomIv);
-                        
-                        // Room decryption
-                        const decryptedChunk = await RoomCrypto.decrypt(encryptedChunk, currentRoomKey, roomIv);
-                        const finalDecrypted = new Uint8Array(decryptedChunk);
-                        
-                        receivedChunks.push(finalDecrypted);
-                        receivedSize += finalDecrypted.byteLength;
-                        
-                        // Memory management for large files
-                        const currentBufferSize = receivedChunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
-                        if (currentBufferSize > MAX_BUFFER_SIZE && receivedSize < totalSize) {
-                            console.log(`💾 Buffer size: ${(currentBufferSize / 1024 / 1024).toFixed(2)}MB`);
-                            
-                            // For very large files on mobile, warn user
-                            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-                            if (isMobile && currentBufferSize > 200 * 1024 * 1024) {
-                                console.warn('⚠️ High memory usage on mobile device');
-                            }
-                        }
-                        
-                        // Update progress
-                        const now = Date.now();
-                        const timeDelta = (now - lastProgressTime) / 1000;
-                        if (timeDelta > 0.1) {
-                            const sizeDelta = receivedSize - lastReceivedSize;
-                            const speedBytesPerSec = sizeDelta / timeDelta;
-                            performanceMetrics.currentDownloadSpeed = speedBytesPerSec;
-                            
-                            if (speedBytesPerSec > performanceMetrics.peakDownloadSpeed) {
-                                performanceMetrics.peakDownloadSpeed = speedBytesPerSec;
-                            }
-                            
-                            const progress = (receivedSize / totalSize) * 100;
-                            updateActiveTransfer(transferId, {
-                                progress: progress,
-                                speed: speedBytesPerSec,
-                                transferred: receivedSize,
-                                status: progress < 100 ? 'Decrypting...' : 'Complete'
-                            });
-                            
-                            lastProgressTime = now;
-                            lastReceivedSize = receivedSize;
-                        }
-                        
-                        if (receivedSize === totalSize) {
-                            console.log('✅ File decrypted successfully:', fileName);
-                            console.log(`📊 Total chunks: ${receivedChunks.length}, Total size: ${(receivedSize / 1024 / 1024).toFixed(2)}MB`);
-                            
-                            // Create blob from all chunks
-                            const blob = new Blob(receivedChunks);
-                            downloadBlob(blob, fileName);
-                            
-                            removeActiveTransfer(transferId);
-                            
-                            performanceMetrics.totalDownloads++;
-                            performanceMetrics.totalDataDownloaded += totalSize;
-                            performanceMetrics.currentDownloadSpeed = 0;
-                            
-                            const transferTime = (Date.now() - startTime) / 1000;
-                            transferHistory.unshift({
-                                name: fileName,
-                                size: totalSize,
-                                time: transferTime,
-                                speed: totalSize / transferTime,
-                                type: 'download',
-                                algorithm: downloadQueue.schedulingAlgorithm,
-                                timestamp: Date.now(),
-                                encrypted: true
-                            });
-                            if (transferHistory.length > 10) transferHistory.pop();
-                            
-                            // Clear memory
-                            receivedChunks = [];
-                            receivedSize = 0;
-                            
-                            // Clear timeout
-                            clearTimeout(transferTimeout);
-                            
-                            showToast(`🔓 File received & decrypted: ${fileName}`, 'success');
-                            
-                            downloadQueue.completeDownload(queueId);
-                            semaphore.release();
-                            
-                            updatePerformanceMetrics();
-                            updatePerformanceUI();
-                        }
-                        
-                    } catch (error) {
-                        console.error('❌ Decryption error:', error);
-                        showToast('Decryption failed', 'error');
-                        removeActiveTransfer(transferId);
-                        downloadQueue.completeDownload(queueId);
-                        semaphore.release();
-                    }
                 }
             } catch (error) {
                 console.error('❌ Message parsing error:', error);
@@ -2278,10 +2142,10 @@ function drawSpeedGraph() {
 
 // Update performance UI elements
 function updatePerformanceUI() {
-    // Update connection stat
+    // Update connection stat (show only active count, not max)
     const connectionStatEl = document.getElementById('connectionStat');
     if (connectionStatEl) {
-        connectionStatEl.textContent = `${semaphore.currentCount}/${semaphore.maxConcurrent}`;
+        connectionStatEl.textContent = `${semaphore.currentCount}`;
     }
     
     // Update metrics
@@ -2328,7 +2192,7 @@ function updateStatsDisplay() {
         currentSpeedEl.textContent = `${speed.toFixed(2)} MB/s`;
     }
     if (activeConnectionsEl) {
-        activeConnectionsEl.textContent = `${semaphore.currentCount}/${semaphore.maxConcurrent}`;
+        activeConnectionsEl.textContent = `${semaphore.currentCount}`;
     }
 }
 
@@ -3449,3 +3313,32 @@ window.handleQueueDragEnd = (event) => {
     draggedQueueItem = null;
 };
 
+
+
+
+// ===== MAIL US FUNCTION =====
+function openEmailClient() {
+    const email = 'aadipandey223@gmail.com';
+    const subject = encodeURIComponent('Secure Share - Feedback');
+    const body = encodeURIComponent('Hi,\n\nI would like to share my feedback:\n\n');
+    
+    // Gmail compose URL - always opens Gmail in browser
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${email}&su=${subject}&body=${body}`;
+    
+    console.log('Opening Gmail:', gmailUrl);
+    
+    // Try to open Gmail in new tab
+    const newWindow = window.open(gmailUrl, '_blank', 'noopener,noreferrer');
+    
+    if (newWindow) {
+        // Successfully opened
+        showToast('Opening Gmail...', 'info');
+    } else {
+        // Popup blocked - try alternative
+        console.log('Popup blocked, trying location.href');
+        window.location.href = gmailUrl;
+    }
+}
+
+// Make function globally accessible
+window.openEmailClient = openEmailClient;
