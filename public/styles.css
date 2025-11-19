@@ -2992,3 +2992,174 @@ body.incognito-mode .copy-tooltip {
 body.incognito-mode .copy-tooltip::after {
     border-top-color: #d4af37;
 }
+
+
+/* ===== MOBILE INCOGNITO MODE FIXES ===== */
+@media (max-width: 768px) {
+    body.incognito-mode .top-nav {
+        background: rgba(26, 26, 26, 0.95);
+        backdrop-filter: blur(30px);
+        border: 1px solid rgba(212, 175, 55, 0.5);
+    }
+    
+    body.incognito-mode .brand-name {
+        background: linear-gradient(135deg, #d4af37 0%, #ffd700 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    
+    body.incognito-mode .btn-create-room,
+    body.incognito-mode .btn-join-room {
+        background: linear-gradient(135deg, #c0c0c0 0%, #e8e8e8 100%);
+        color: #000;
+        font-weight: 700;
+    }
+    
+    body.incognito-mode .status-badge,
+    body.incognito-mode .peer-badge {
+        background: rgba(74, 85, 104, 0.3);
+        border: 1px solid rgba(212, 175, 55, 0.5);
+    }
+    
+    body.incognito-mode .hero-title {
+        background: linear-gradient(135deg, #d4af37 0%, #ffd700 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    
+    body.incognito-mode .stat-card {
+        background: rgba(74, 85, 104, 0.2);
+        border: 1px solid rgba(212, 175, 55, 0.4);
+    }
+    
+    body.incognito-mode .section {
+        background: rgba(26, 26, 26, 0.8);
+        border: 1px solid rgba(212, 175, 55, 0.4);
+    }
+    
+    body.incognito-mode .upload-zone {
+        background: rgba(74, 85, 104, 0.15);
+        border: 2px dashed rgba(212, 175, 55, 0.4);
+    }
+    
+    body.incognito-mode .file-item-compact {
+        background: rgba(74, 85, 104, 0.1);
+        border: 1px solid rgba(212, 175, 55, 0.3);
+    }
+    
+    body.incognito-mode .btn-download {
+        background: linear-gradient(135deg, #c0c0c0 0%, #e8e8e8 100%);
+        color: #000;
+        font-weight: 600;
+    }
+    
+    body.incognito-mode .btn-danger {
+        background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+        color: white;
+    }
+}
+
+@media (max-width: 480px) {
+    body.incognito-mode .top-nav {
+        padding: 1rem;
+        background: rgba(26, 26, 26, 0.98);
+    }
+    
+    body.incognito-mode .brand-icon {
+        width: 48px;
+        height: 48px;
+    }
+    
+    body.incognito-mode .brand-name {
+        font-size: 1.25rem;
+    }
+    
+    body.incognito-mode .hero-title {
+        font-size: 2rem;
+    }
+    
+    body.incognito-mode .stat-card {
+        padding: 1.25rem 1rem;
+        background: rgba(74, 85, 104, 0.25);
+    }
+    
+    body.incognito-mode .section {
+        padding: 1.25rem;
+        background: rgba(26, 26, 26, 0.9);
+    }
+    
+    body.incognito-mode .upload-zone {
+        padding: 2rem 1.25rem;
+        background: rgba(74, 85, 104, 0.2);
+    }
+    
+    body.incognito-mode .btn-upload {
+        background: linear-gradient(135deg, #c0c0c0 0%, #e8e8e8 100%);
+        color: #000;
+        font-weight: 700;
+    }
+}
+
+/* ===== MOBILE TOUCH IMPROVEMENTS ===== */
+@media (max-width: 768px) {
+    /* Larger touch targets */
+    .btn-download,
+    .btn-danger,
+    .btn-priority {
+        min-height: 48px;
+        min-width: 48px;
+        padding: 0.75rem 1.25rem;
+    }
+    
+    /* Better spacing for mobile */
+    .file-item-compact {
+        padding: 1.25rem;
+        gap: 1rem;
+    }
+    
+    /* Easier to tap buttons */
+    .file-actions {
+        gap: 0.75rem;
+    }
+    
+    /* Mobile-friendly modals */
+    .modal-content {
+        width: 95%;
+        max-width: none;
+        margin: 1rem;
+    }
+    
+    /* Better room buttons on mobile */
+    .room-buttons {
+        width: 100%;
+    }
+    
+    .btn-create-room,
+    .btn-join-room,
+    .btn-leave-room {
+        flex: 1;
+        min-height: 48px;
+    }
+}
+
+@media (max-width: 480px) {
+    /* Even larger touch targets for small phones */
+    .btn-download,
+    .btn-danger,
+    .btn-priority {
+        min-height: 52px;
+        font-size: 0.9375rem;
+    }
+    
+    /* Compact file list for small screens */
+    .file-item-compact {
+        padding: 1rem;
+    }
+    
+    /* Stack buttons vertically if needed */
+    .file-actions {
+        flex-wrap: wrap;
+    }
+}

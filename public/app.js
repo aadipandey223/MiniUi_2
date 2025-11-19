@@ -1427,7 +1427,12 @@ async function downloadFileFromQueue(queueItem) {
 
 // Send file through data channel with TRIPLE-LAYER ENCRYPTION
 async function sendFile(dataChannel, file) {
-    const chunkSize = 262144; // 256KB chunks for faster transfer
+    // Adaptive chunk size based on file size (smaller chunks for large files = more stable)
+    let chunkSize = 262144; // 256KB default
+    if (file.size > 500 * 1024 * 1024) { // > 500MB
+        chunkSize = 131072; // 128KB for large files (more stable)
+        console.log('📦 Using smaller chunks (128KB) for large file stability');
+    }
     const totalSize = file.size;
     let offset = 0;
     let lastProgressTime = Date.now();
@@ -1481,13 +1486,13 @@ async function sendFile(dataChannel, file) {
                     const packagedData = JSON.stringify(encryptedPackage);
                     
                     // Check buffer before sending - wait if buffer is full
-                    if (dataChannel.bufferedAmount > chunkSize * 2) {
-                        // Wait for buffer to drain
+                    if (dataChannel.bufferedAmount > chunkSize) {
+                        // Wait for buffer to drain (shorter wait for better flow)
                         setTimeout(() => {
                             dataChannel.send(packagedData);
                             offset += chunkSize;
                             processNextChunk();
-                        }, 50);
+                        }, 20);
                         return; // Don't continue below
                     }
                     
@@ -1497,13 +1502,13 @@ async function sendFile(dataChannel, file) {
                 } else {
                     // Global mode: Send unencrypted for speed (WebRTC is already encrypted via DTLS)
                     // Check buffer before sending - wait if buffer is full
-                    if (dataChannel.bufferedAmount > chunkSize * 2) {
-                        // Wait for buffer to drain
+                    if (dataChannel.bufferedAmount > chunkSize) {
+                        // Wait for buffer to drain (shorter wait for better flow)
                         setTimeout(() => {
                             dataChannel.send(chunkData);
                             offset += chunkSize;
                             processNextChunk();
-                        }, 50);
+                        }, 20);
                         return; // Don't continue below
                     }
                     
@@ -1572,7 +1577,7 @@ async function performDownload(fileInfo, queueId, connectionStartTime = Date.now
         maxRetransmits: 30
     });
     
-    let receivedBuffer = [];
+    let receivedChunks = []; // Store chunks temporarily
     let receivedSize = 0;
     let totalSize = 0;
     let fileName = '';
@@ -1581,10 +1586,22 @@ async function performDownload(fileInfo, queueId, connectionStartTime = Date.now
     let lastProgressTime = Date.now();
     let lastReceivedSize = 0;
     const transferId = `download-${Date.now()}`;
+    const MAX_BUFFER_SIZE = 50 * 1024 * 1024; // 50MB max buffer before flushing
+    
+    // Add timeout for large files (30 minutes max)
+    const transferTimeout = setTimeout(() => {
+        console.error('⏱️ Transfer timeout - taking too long');
+        showToast('Download timeout - file too large or connection too slow', 'error');
+        removeActiveTransfer(transferId);
+        downloadQueue.completeDownload(queueId);
+        semaphore.release();
+        dataChannel.close();
+    }, 30 * 60 * 1000); // 30 minutes
     
     dataChannel.onopen = () => {
         console.log('📡 Data channel opened, requesting file:', fileInfo.name);
         console.log('   FileInfo:', { id: fileInfo.id, name: fileInfo.name, size: fileInfo.size, peerId: fileInfo.peerId });
+        console.log('   File size: ' + (fileInfo.size / 1024 / 1024).toFixed(2) + 'MB');
         
         // Request the file
         const request = {
@@ -1689,8 +1706,20 @@ async function performDownload(fileInfo, queueId, connectionStartTime = Date.now
                         const sessionIv = CryptoUtils.base64ToUint8Array(parsed.sessionIv);
                         const finalDecrypted = await SessionCrypto.decryptChunk(decryptedChunk, sessionKey, sessionIv);
                         
-                        receivedBuffer.push(finalDecrypted);
+                        receivedChunks.push(finalDecrypted);
                         receivedSize += finalDecrypted.byteLength;
+                        
+                        // Memory management for large files
+                        const currentBufferSize = receivedChunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+                        if (currentBufferSize > MAX_BUFFER_SIZE && receivedSize < totalSize) {
+                            console.log(`💾 Buffer size: ${(currentBufferSize / 1024 / 1024).toFixed(2)}MB`);
+                            
+                            // For very large files on mobile, warn user
+                            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+                            if (isMobile && currentBufferSize > 200 * 1024 * 1024) {
+                                console.warn('⚠️ High memory usage on mobile device');
+                            }
+                        }
                         
                         // Update progress
                         const now = Date.now();
@@ -1718,7 +1747,10 @@ async function performDownload(fileInfo, queueId, connectionStartTime = Date.now
                         
                         if (receivedSize === totalSize) {
                             console.log('✅ File decrypted successfully:', fileName);
-                            const blob = new Blob(receivedBuffer);
+                            console.log(`📊 Total chunks: ${receivedChunks.length}, Total size: ${(receivedSize / 1024 / 1024).toFixed(2)}MB`);
+                            
+                            // Create blob from all chunks
+                            const blob = new Blob(receivedChunks);
                             downloadBlob(blob, fileName);
                             
                             removeActiveTransfer(transferId);
@@ -1740,10 +1772,14 @@ async function performDownload(fileInfo, queueId, connectionStartTime = Date.now
                             });
                             if (transferHistory.length > 10) transferHistory.pop();
                             
-                            receivedBuffer = [];
+                            // Clear memory
+                            receivedChunks = [];
                             receivedSize = 0;
                             
-                            showToast(`🔓 File received & decrypted: ${fileName}`);
+                            // Clear timeout
+                            clearTimeout(transferTimeout);
+                            
+                            showToast(`🔓 File received & decrypted: ${fileName}`, 'success');
                             
                             downloadQueue.completeDownload(queueId);
                             semaphore.release();
@@ -1774,7 +1810,7 @@ async function performDownload(fileInfo, queueId, connectionStartTime = Date.now
                 }
             }
             
-            receivedBuffer.push(event.data);
+            receivedChunks.push(event.data);
             receivedSize += event.data.byteLength;
             
             // Calculate download speed
@@ -1802,7 +1838,7 @@ async function performDownload(fileInfo, queueId, connectionStartTime = Date.now
             }
             
             if (receivedSize === totalSize) {
-                const blob = new Blob(receivedBuffer);
+                const blob = new Blob(receivedChunks);
                 downloadBlob(blob, fileName);
                 
                 // Remove from active transfers
@@ -1826,7 +1862,7 @@ async function performDownload(fileInfo, queueId, connectionStartTime = Date.now
                 });
                 if (transferHistory.length > 10) transferHistory.pop();
                 
-                receivedBuffer = [];
+                receivedChunks = [];
                 receivedSize = 0;
                 
                 // Show toast
@@ -1867,16 +1903,68 @@ async function performDownload(fileInfo, queueId, connectionStartTime = Date.now
     socket.emit('offer', { offer: offer, targetPeerId: peerId });
 }
 
-// Download blob as file
+// Download blob as file with mobile optimization
 function downloadBlob(blob, filename) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    try {
+        // For mobile devices, use a different approach
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        
+        if (isMobile && blob.size > 100 * 1024 * 1024) { // > 100MB on mobile
+            console.log('📱 Mobile device detected, using optimized download');
+            // Try to use File System Access API if available
+            if ('showSaveFilePicker' in window) {
+                saveFileWithPicker(blob, filename);
+                return;
+            }
+        }
+        
+        // Standard download method
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        
+        // Clean up after a delay
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 100);
+        
+    } catch (error) {
+        console.error('Download error:', error);
+        showToast('Download failed: ' + error.message, 'error');
+    }
+}
+
+// File System Access API for large files
+async function saveFileWithPicker(blob, filename) {
+    try {
+        const handle = await window.showSaveFilePicker({
+            suggestedName: filename,
+            types: [{
+                description: 'File',
+                accept: {'*/*': []}
+            }]
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        showToast('File saved successfully!', 'success');
+    } catch (error) {
+        console.error('Save picker error:', error);
+        // Fallback to standard download
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
 }
 
 // Progress UI
@@ -3267,6 +3355,28 @@ window.downloadFileWithPriority = (fileInfo, priority) => {
         max: semaphore.maxConcurrent,
         canAcquire: semaphore.canAcquire()
     });
+    
+    // Check if mobile and file is large
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const fileSizeMB = fileInfo.size / 1024 / 1024;
+    
+    if (isMobile && fileSizeMB > 500) {
+        const proceed = confirm(
+            `⚠️ Large File Warning\n\n` +
+            `File: ${fileInfo.name}\n` +
+            `Size: ${fileSizeMB.toFixed(0)}MB\n\n` +
+            `Large files may fail on mobile devices due to memory limits.\n\n` +
+            `Recommendations:\n` +
+            `• Use a desktop/laptop for files > 500MB\n` +
+            `• Close other apps to free memory\n` +
+            `• Ensure stable WiFi connection\n\n` +
+            `Continue download?`
+        );
+        if (!proceed) {
+            showToast('Download cancelled', 'warning');
+            return;
+        }
+    }
     
     // Use the proper DownloadQueue method
     const queueId = downloadQueue.addToQueue(fileInfo, priority);
