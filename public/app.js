@@ -1670,8 +1670,8 @@ async function performDownload(fileInfo, queueId, connectionStartTime = Date.now
                     const totalConnectionTime = performanceMetrics.averageConnectionTime * performanceMetrics.totalDownloads;
                     performanceMetrics.averageConnectionTime = (totalConnectionTime + connectionTime) / (performanceMetrics.totalDownloads + 1);
                     
-                } else if (parsed.data && parsed.signature) {
-                    // This is an encrypted chunk
+                } else if (parsed.data && parsed.roomIv) {
+                    // This is a room-encrypted chunk (private mode)
                     if (firstChunkTime === 0) {
                         firstChunkTime = Date.now();
                         const queueItem = downloadQueue.queue.find(q => q.id === queueId);
@@ -1681,30 +1681,13 @@ async function performDownload(fileInfo, queueId, connectionStartTime = Date.now
                     }
                     
                     try {
-                        // Decrypt the chunk with triple-layer decryption
-                        let decryptedChunk = CryptoUtils.base64ToUint8Array(parsed.data);
+                        // Decrypt the chunk with room encryption
+                        let encryptedChunk = CryptoUtils.base64ToUint8Array(parsed.data);
+                        const roomIv = CryptoUtils.base64ToUint8Array(parsed.roomIv);
                         
-                        // LAYER 3: Verify signature (RSA)
-                        const signature = CryptoUtils.base64ToArrayBuffer(parsed.signature);
-                        const senderPublicKey = await IdentityCrypto.importPublicKey(fileInfo.publicKey || userIdentity.publicKeyBase64);
-                        const isValid = await IdentityCrypto.verify(decryptedChunk, signature, senderPublicKey);
-                        
-                        if (!isValid) {
-                            console.error('❌ Signature verification failed!');
-                            showToast('Security warning: Invalid signature', 'error');
-                            return;
-                        }
-                        
-                        // LAYER 2: Room decryption (if in room)
-                        if (parsed.roomIv && currentRoomKey) {
-                            const roomIv = CryptoUtils.base64ToUint8Array(parsed.roomIv);
-                            decryptedChunk = await RoomCrypto.decrypt(decryptedChunk, currentRoomKey, roomIv);
-                            decryptedChunk = new Uint8Array(decryptedChunk);
-                        }
-                        
-                        // LAYER 1: Session decryption (AES-GCM)
-                        const sessionIv = CryptoUtils.base64ToUint8Array(parsed.sessionIv);
-                        const finalDecrypted = await SessionCrypto.decryptChunk(decryptedChunk, sessionKey, sessionIv);
+                        // Room decryption
+                        const decryptedChunk = await RoomCrypto.decrypt(encryptedChunk, currentRoomKey, roomIv);
+                        const finalDecrypted = new Uint8Array(decryptedChunk);
                         
                         receivedChunks.push(finalDecrypted);
                         receivedSize += finalDecrypted.byteLength;
