@@ -1,5 +1,12 @@
 // Socket.io connection
-const socket = io();
+let socket;
+try {
+    socket = io();
+    console.log('✅ Socket.io initialized');
+} catch (error) {
+    console.error('❌ Failed to initialize Socket.io:', error);
+    alert('Failed to connect to server. Please refresh the page.');
+}
 
 // Room state management
 let currentRoomId = null;
@@ -51,32 +58,47 @@ async function initializeIdentity() {
 // Check if URL has room ID
 function checkForRoomInURL() {
     const path = window.location.pathname;
+    console.log('🔍 Checking URL path:', path);
     const match = path.match(/\/room\/([a-zA-Z0-9]+)/);
     
     if (match) {
         const roomId = match[1];
-        console.log('📍 Room ID in URL:', roomId);
-        // Fetch room info
-        fetch(`/api/rooms/${roomId}`)
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    if (data.room.requiresPassword) {
-                        // Show password prompt
-                        pendingRoomJoin = roomId;
-                        showJoinRoomModal();
+        console.log('📍 Room ID found in URL:', roomId);
+        
+        // Small delay to ensure socket is connected
+        setTimeout(() => {
+            console.log('🔄 Fetching room info for:', roomId);
+            // Fetch room info
+            fetch(`/api/rooms/${roomId}`)
+                .then(res => {
+                    console.log('📥 Room API response status:', res.status);
+                    return res.json();
+                })
+                .then(data => {
+                    console.log('📦 Room data:', data);
+                    if (data.success) {
+                        if (data.room.requiresPassword) {
+                            console.log('🔒 Room requires password, showing modal');
+                            // Show password prompt
+                            pendingRoomJoin = roomId;
+                            showJoinRoomModal();
+                        } else {
+                            console.log('✅ Room has no password, joining directly');
+                            // Join directly
+                            joinRoom(roomId, null);
+                        }
                     } else {
-                        // Join directly
-                        joinRoom(roomId, null);
+                        console.error('❌ Room error:', data.error);
+                        showToast(data.error, 'error');
                     }
-                } else {
-                    showToast(data.error, 'error');
-                }
-            })
-            .catch(err => {
-                console.error('Error fetching room:', err);
-                showToast('Failed to load room', 'error');
-            });
+                })
+                .catch(err => {
+                    console.error('❌ Error fetching room:', err);
+                    showToast('Failed to load room', 'error');
+                });
+        }, 500);
+    } else {
+        console.log('ℹ️ No room ID in URL');
     }
 }
 
@@ -309,8 +331,13 @@ function showRoomLink(roomId, shareLink) {
     
     modal.classList.add('show');
     
-    // Store room ID for joining
+    // Store room ID and password for joining
     modal.dataset.roomId = roomId;
+    // Store the password that was used to create the room
+    const password = document.getElementById('roomPassword').value;
+    modal.dataset.password = password || '';
+    
+    console.log('💾 Stored room info - ID:', roomId, 'Password:', password ? 'set' : 'none');
 }
 
 function closeRoomLinkModal() {
@@ -357,7 +384,10 @@ function copyRoomLink() {
 async function joinCreatedRoom() {
     const modal = document.getElementById('roomLinkModal');
     const roomId = modal.dataset.roomId;
-    const password = document.getElementById('roomPassword').value;
+    // Get the password that was used to create the room (stored in modal)
+    const password = modal.dataset.password || null;
+    
+    console.log('🚪 Joining created room:', roomId, 'with password:', password ? '***' : 'none');
     
     closeRoomLinkModal();
     await joinRoom(roomId, password);

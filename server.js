@@ -19,7 +19,13 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
+
+// Serve static files FIRST (before any routes)
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, filePath) => {
+    console.log('📁 Serving static file:', filePath);
+  }
+}));
 
 // Store connected peers and their shared files
 const peers = new Map();
