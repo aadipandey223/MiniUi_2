@@ -2865,7 +2865,7 @@ function renderAvailableFilesCompact() {
                 </svg>
                 <div class="file-item-info">
                     <div class="file-item-name">
-                        ${file.priority ? '<span class="priority-badge">⚡ [Priority]</span> ' : ''}
+                        ${file.priority ? '<span class="priority-badge">⚡ Priority</span> ' : ''}
                         ${file.name}
                     </div>
                     <div class="file-item-meta">${formatBytes(file.size)} • From: ${peerId}</div>
