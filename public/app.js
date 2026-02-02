@@ -1831,7 +1831,7 @@ function renderMyFiles() {
         fileItem.className = 'file-item';
         fileItem.innerHTML = `
             <div class="file-info">
-                <div class="file-name">${file.name}</div>
+                <div class="file-name">${escapeHtml(file.name)}</div>
                 <div class="file-meta">${formatBytes(file.size)}</div>
             </div>
             <div class="file-actions">
@@ -1857,8 +1857,8 @@ function renderAvailableFiles() {
         fileItem.className = 'file-item';
         fileItem.innerHTML = `
             <div class="file-info">
-                <div class="file-name">${file.name}</div>
-                <div class="file-meta">${formatBytes(file.size)} • From peer: ${file.peerId.substring(0, 8)}</div>
+                <div class="file-name">${escapeHtml(file.name)}</div>
+                <div class="file-meta">${formatBytes(file.size)} • From peer: ${escapeHtml(file.peerId.substring(0, 8))}</div>
             </div>
             <div class="file-actions">
                 <select class="priority-select" id="priority-${file.id}">
@@ -1898,7 +1898,7 @@ function renderDownloadQueue() {
         queueItem.innerHTML = `
             <div class="queue-icon">${icon}</div>
             <div class="queue-info">
-                <div class="queue-name">${item.fileInfo.name}</div>
+                <div class="queue-name">${escapeHtml(item.fileInfo.name)}</div>
                 <div class="queue-meta">
                     ${formatBytes(item.size)} • Priority: ${item.priority} • ${item.status.toUpperCase()}
                     ${item.status === 'waiting' ? ` • Wait: ${(waitTime / 1000).toFixed(1)}s` : ''}
@@ -1986,7 +1986,7 @@ function renderTransferHistory() {
             <div class="history-item ${typeClass}">
                 <span class="history-icon">${icon}</span>
                 <div class="history-info">
-                    <div class="history-name">${transfer.name}</div>
+                    <div class="history-name">${escapeHtml(transfer.name)}</div>
                     <div class="history-meta">
                         ${formatBytes(transfer.size)} • 
                         ${transfer.time.toFixed(1)}s • 
@@ -2019,8 +2019,8 @@ function renderActiveTransfers() {
             <div class="transfer-item">
                 <div class="transfer-header">
                     <div class="transfer-info">
-                        <h4>${transfer.name}</h4>
-                        <div class="transfer-peer">From: ${transfer.peerId || 'peer'}</div>
+                        <h4>${escapeHtml(transfer.name)}</h4>
+                        <div class="transfer-peer">From: ${escapeHtml(transfer.peerId || 'peer')}</div>
                     </div>
                     <div class="transfer-stats">
                         <div class="transfer-percentage">${percentage}%</div>
@@ -2456,6 +2456,16 @@ window.removeFile = (fileId) => {
 };
 
 // Helper functions
+function escapeHtml(text) {
+    if (!text) return text;
+    return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
 function formatBytes(bytes) {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -2559,8 +2569,8 @@ function renderActiveDownloads() {
         <div class="transfer-item">
             <div class="transfer-header">
                 <div class="transfer-info">
-                    <h4>${transfer.name}${encryptionBadge}</h4>
-                    <div class="transfer-peer">From: ${transfer.peerId}</div>
+                    <h4>${escapeHtml(transfer.name)}${encryptionBadge}</h4>
+                    <div class="transfer-peer">From: ${escapeHtml(transfer.peerId)}</div>
                 </div>
                 <div class="transfer-stats">
                     <div class="transfer-percentage">${transfer.progress.toFixed(0)}%</div>
@@ -2596,8 +2606,8 @@ function renderActiveUploads() {
         <div class="transfer-item">
             <div class="transfer-header">
                 <div class="transfer-info">
-                    <h4>${transfer.name}${encryptionBadge}</h4>
-                    <div class="transfer-peer">To: ${transfer.peerId}</div>
+                    <h4>${escapeHtml(transfer.name)}${encryptionBadge}</h4>
+                    <div class="transfer-peer">To: ${escapeHtml(transfer.peerId)}</div>
                 </div>
                 <div class="transfer-stats">
                     <div class="transfer-percentage">${transfer.progress.toFixed(0)}%</div>
@@ -2801,7 +2811,7 @@ function renderMyFilesCompact() {
                     <path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5h-2z"/>
                 </svg>
                 <div class="file-item-info">
-                    <div class="file-item-name">${file.name}</div>
+                    <div class="file-item-name">${escapeHtml(file.name)}</div>
                     <div class="file-item-meta">
                         ${formatBytes(file.size)}
                         ${expiryBadge}
@@ -2866,9 +2876,9 @@ function renderAvailableFilesCompact() {
                 <div class="file-item-info">
                     <div class="file-item-name">
                         ${file.priority ? '<span class="priority-badge">⚡ Priority</span> ' : ''}
-                        ${file.name}
+                        ${escapeHtml(file.name)}
                     </div>
-                    <div class="file-item-meta">${formatBytes(file.size)} • From: ${peerId}</div>
+                    <div class="file-item-meta">${formatBytes(file.size)} • From: ${escapeHtml(peerId)}</div>
                 </div>
             </div>
             <div style="display: flex; gap: 8px;">
@@ -3052,7 +3062,7 @@ function renderTransferQueues() {
                         </svg>
                         <div class="file-item-info">
                             <div class="file-item-name">
-                                ${priorityIcon} ${item.fileInfo.name}
+                                ${priorityIcon} ${escapeHtml(item.fileInfo.name)}
                             </div>
                             <div class="file-item-meta">(${formatBytes(item.size)}) • Wait: ${waitTime}s</div>
                         </div>
@@ -3105,7 +3115,7 @@ function renderTransferQueues() {
                         </svg>
                         <div class="file-item-info">
                             <div class="file-item-name">
-                                ${priorityIcon} ${item.fileInfo.name}
+                                ${priorityIcon} ${escapeHtml(item.fileInfo.name)}
                             </div>
                             <div class="file-item-meta">Wait: ${waitTime}s</div>
                         </div>
