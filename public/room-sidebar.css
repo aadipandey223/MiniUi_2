@@ -1,0 +1,278 @@
+/* ===================================
+   PRIVATE ROOM SIDEBAR STYLES
+   =================================== */
+
+.room-sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 260px;
+    height: 100vh;
+    background: var(--bg-main);
+    border-right: 1px solid var(--border-subtle);
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    z-index: 100;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow-y: auto;
+}
+
+.room-sidebar.hidden {
+    transform: translateX(-100%);
+}
+
+/* When room sidebar is visible, shift the app container */
+body:has(.room-sidebar:not(.hidden)) .app-container {
+    margin-left: 260px;
+}
+
+/* Room Header */
+.room-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.room-icon-lock {
+    width: 40px;
+    height: 40px;
+    background: rgba(59, 130, 246, 0.1);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-blue);
+}
+
+.room-title-info h3 {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 2px;
+}
+
+.room-label {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+/* Room Code Section */
+.room-code-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.room-code-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.room-code-box {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 10px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.room-code-value {
+    font-family: 'Courier New', monospace;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--text-primary);
+}
+
+.btn-copy-code {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-copy-code:hover {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+}
+
+/* Room Stats Row */
+.room-stats-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.room-stat-box {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.room-stat-box.secure {
+    background: rgba(16, 185, 129, 0.05);
+    border-color: rgba(16, 185, 129, 0.15);
+}
+
+.room-stat-box svg {
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.room-stat-box.secure svg {
+    color: var(--accent-green);
+}
+
+.stat-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.stat-value {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.stat-label {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+/* Room Protection Card (Compact) */
+.room-protection-card {
+    background: rgba(16, 185, 129, 0.03);
+    border: 1px solid rgba(16, 185, 129, 0.1);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.protection-header-compact {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.shield-icon-compact {
+    width: 36px;
+    height: 36px;
+    background: rgba(16, 185, 129, 0.1);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-green);
+    flex-shrink: 0;
+}
+
+.protection-info-compact h4 {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.status-active-compact {
+    font-size: 11px;
+    color: var(--accent-green);
+    opacity: 0.8;
+}
+
+.protection-details-compact {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.p-item-compact {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 11px;
+}
+
+.p-right-compact {
+    font-family: monospace;
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 10px;
+}
+
+/* Room Active Badge */
+.room-active-badge {
+    background: rgba(139, 92, 246, 0.1);
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    border-radius: 10px;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent-purple);
+}
+
+/* Leave Room Button */
+.btn-leave-room {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.15);
+    color: var(--accent-red);
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: auto;
+}
+
+.btn-leave-room:hover {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: var(--accent-red);
+}
+
+/* Scrollbar for Room Sidebar */
+.room-sidebar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.room-sidebar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+}
+
+.room-sidebar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.1);
+}

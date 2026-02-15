@@ -1,485 +1,473 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Secure Share - P2P File Transfer</title>
     <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/room-sidebar.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
+
 <body>
-    <!-- Background Gradient -->
-    <div class="bg-gradient"></div>
-    
     <div class="app-container">
-        <!-- Top Navigation -->
-        <header class="top-nav">
-            <div class="nav-left">
-                <div class="brand">
-                    <div class="brand-icon">
-                        <img src="/2.png" alt="Secure Share Logo" class="brand-logo-img">
-                    </div>
-                    <span class="brand-name">Secure Share</span>
+        <!-- Header -->
+        <header class="header">
+            <div class="brand-wrapper">
+                <div class="brand-icon-box">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    </svg>
+                </div>
+                <div class="brand-info">
+                    <h1>Secure Share</h1>
+                    <p>P2P Encrypted File Transfer</p>
                 </div>
             </div>
-            <div class="nav-right">
-                <div class="room-buttons">
-                    <button class="btn-create-room" id="createRoomBtn" onclick="showCreateRoomModal()">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                            <line x1="12" y1="8" x2="12" y2="16"/>
-                            <line x1="8" y1="12" x2="16" y2="12"/>
-                        </svg>
-                        Create
-                    </button>
-                    <button class="btn-join-room" id="joinRoomBtn" onclick="showJoinRoomPrompt()">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
-                            <polyline points="10 17 15 12 10 7"/>
-                            <line x1="15" y1="12" x2="3" y2="12"/>
-                        </svg>
-                        Join
-                    </button>
-                    <button class="btn-leave-room" id="leaveRoomBtn" onclick="leaveRoom()" style="display: none;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                            <polyline points="16 17 21 12 16 7"/>
-                            <line x1="21" y1="12" x2="9" y2="12"/>
-                        </svg>
-                        Leave
-                    </button>
-                </div>
-                <div class="status-badge" id="statusBadge">
-                    <span class="status-dot" id="connectionStatus"></span>
-                    <span id="connectionText">Connecting...</span>
-                </div>
-                <div class="peer-badge">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                        <circle cx="9" cy="7" r="4"/>
-                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+
+            <div class="badge-row">
+                <div class="badge encrypted">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.5">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                     </svg>
-                    <span id="peerCount">0</span>
+                    E2E Encrypted
+                </div>
+                <div class="badge p2p">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.5">
+                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                    </svg>
+                    P2P Transfer
+                </div>
+                <div class="badge zero">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.5">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="2" y1="12" x2="22" y2="12" />
+                        <path
+                            d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                    </svg>
+                    Zero Knowledge
                 </div>
             </div>
         </header>
 
-        <!-- Hero Section with Stats -->
-        <div class="hero-section">
-            <div class="hero-content">
-                <h1 class="hero-title">Share Files Securely</h1>
-                <p class="hero-subtitle">Peer-to-peer file transfer with end-to-end encryption</p>
-            </div>
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-icon download">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                            <polyline points="7 10 12 15 17 10"/>
-                            <line x1="12" y1="15" x2="12" y2="3"/>
-                        </svg>
-                    </div>
-                    <div class="stat-info">
-                        <div class="stat-value" id="totalDownloads">0</div>
-                        <div class="stat-label">Downloads</div>
-                    </div>
+        <!-- Private Room Sidebar (shown when in a room) -->
+        <aside class="room-sidebar hidden" id="roomSidebar">
+            <div class="room-header">
+                <div class="room-icon-lock">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.5">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-icon upload">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                            <polyline points="17 8 12 3 7 8"/>
-                            <line x1="12" y1="3" x2="12" y2="15"/>
-                        </svg>
-                    </div>
-                    <div class="stat-info">
-                        <div class="stat-value" id="totalUploads">0</div>
-                        <div class="stat-label">Uploads</div>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon speed">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
-                            <polyline points="17 6 23 6 23 12"/>
-                        </svg>
-                    </div>
-                    <div class="stat-info">
-                        <div class="stat-value" id="currentSpeedStat">0 MB/s</div>
-                        <div class="stat-label">Current Speed</div>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon connections">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                            <circle cx="12" cy="12" r="10"/>
-                            <line x1="2" y1="12" x2="22" y2="12"/>
-                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-                        </svg>
-                    </div>
-                    <div class="stat-info">
-                        <div class="stat-value" id="activeConnections">0</div>
-                        <div class="stat-label">Connections</div>
-                    </div>
+                <div class="room-title-info">
+                    <h3 id="roomName">k</h3>
+                    <span class="room-label">Private Room</span>
                 </div>
             </div>
-        </div>
 
-        <!-- Active Transfers Section -->
-        <div class="section" id="activeTransfersSection" style="display: none;">
-            <div class="section-header">
-                <h2 class="section-title">Active Transfers</h2>
-            </div>
-            <div class="transfers-grid">
-                <div class="transfer-card" id="activeDownloadsList">
-                    <div class="transfer-card-header">
-                        <div class="transfer-icon download">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                                <polyline points="7 10 12 15 17 10"/>
-                                <line x1="12" y1="15" x2="12" y2="3"/>
-                            </svg>
-                        </div>
-                        <span>Downloading</span>
-                    </div>
-                    <div class="transfer-list"></div>
-                </div>
-                <div class="transfer-card" id="activeUploadsList1">
-                    <div class="transfer-card-header">
-                        <div class="transfer-icon upload">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                                <polyline points="17 8 12 3 7 8"/>
-                                <line x1="12" y1="3" x2="12" y2="15"/>
-                            </svg>
-                        </div>
-                        <span>Uploading</span>
-                    </div>
-                    <div class="transfer-list"></div>
-                </div>
-            </div>
-        </div>
-
-        </div>
-
-        <!-- Main Content Grid -->
-        <div class="main-grid">
-            <!-- Share Files Section -->
-            <div class="section">
-                <div class="section-header">
-                    <h2 class="section-title">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            <div class="room-code-section">
+                <label class="room-code-label">Room Code</label>
+                <div class="room-code-box">
+                    <span class="room-code-value" id="roomCodeValue">WG9UPX</span>
+                    <button class="btn-copy-code" onclick="window.copyRoomCode()" title="Copy room code">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                         </svg>
-                        Your Shared Files
-                    </h2>
-                    <div class="header-actions">
-                        <div class="upload-options-compact">
-                            <label for="fileExpiry" class="expiry-label" title="Set file expiration time">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <circle cx="12" cy="12" r="10"/>
-                                    <polyline points="12 6 12 12 16 14"/>
-                                </svg>
-                            </label>
-                            <select id="fileExpiry" class="expiry-select">
-                                <option value="30000">30 sec</option>
-                                <option value="60000">1 min</option>
-                                <option value="300000">5 min</option>
-                                <option value="600000" selected>10 min</option>
-                                <option value="1200000">20 min</option>
-                                <option value="1800000">30 min</option>
-                                <option value="3600000">1 hour</option>
-                                <option value="7200000">2 hours</option>
-                                <option value="14400000">4 hours</option>
-                                <option value="28800000">8 hours</option>
-                                <option value="43200000">12 hours</option>
-                                <option value="86400000">24 hours</option>
-                                <option value="0">Never</option>
-                            </select>
-                        </div>
-                        <button class="btn-remove-all" id="removeAllBtn" onclick="window.removeAllSharedFiles()" title="Remove all shared files" style="display: none;">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="3 6 5 6 21 6"/>
-                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                                <line x1="10" y1="11" x2="10" y2="17"/>
-                                <line x1="14" y1="11" x2="14" y2="17"/>
-                            </svg>
-                            Remove All
-                        </button>
-                    </div>
-                </div>
-                <div class="upload-zone" id="uploadArea">
-                    <input type="file" id="fileInput" multiple hidden>
-                    <div class="upload-icon-wrapper">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                            <polyline points="17 8 12 3 7 8"/>
-                            <line x1="12" y1="3" x2="12" y2="15"/>
-                        </svg>
-                    </div>
-                    <h3 class="upload-title">Drop files to share</h3>
-                    <p class="upload-desc">or click to browse</p>
-                    <span class="upload-limit">Maximum file size: 2 GB • All file types supported</span>
-                    
-                    <button class="btn-upload" onclick="document.getElementById('fileInput').click()">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                            <polyline points="17 8 12 3 7 8"/>
-                            <line x1="12" y1="3" x2="12" y2="15"/>
-                        </svg>
-                        Select Files
                     </button>
                 </div>
-                <div id="myFilesList" class="files-list"></div>
             </div>
 
-            <!-- Available Files Section -->
-            <div class="section">
-                <div class="section-header">
-                    <h2 class="section-title">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
-                            <polyline points="13 2 13 9 20 9"/>
-                        </svg>
-                        Available Files
-                    </h2>
-                </div>
-                <div id="availableFiles" class="files-list">
-                    <div class="empty-state-container">
-                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
-                            <circle cx="12" cy="12" r="10"/>
-                            <line x1="12" y1="8" x2="12" y2="12"/>
-                            <line x1="12" y1="16" x2="12.01" y2="16"/>
-                        </svg>
-                        <p class="empty-state-text">No files available</p>
-                        <p class="empty-state-subtext">Waiting for peers to share files</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-
-
-        <!-- Transfer Queue Section -->
-        <div class="section" id="queueSection">
-            <div class="section-header">
-                <h2 class="section-title">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="8" y1="6" x2="21" y2="6"/>
-                        <line x1="8" y1="12" x2="21" y2="12"/>
-                        <line x1="8" y1="18" x2="21" y2="18"/>
-                        <line x1="3" y1="6" x2="3.01" y2="6"/>
-                        <line x1="3" y1="12" x2="3.01" y2="12"/>
-                        <line x1="3" y1="18" x2="3.01" y2="18"/>
+            <div class="room-stats-row">
+                <div class="room-stat-box">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.5">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                        <circle cx="9" cy="7" r="4" />
                     </svg>
-                    Download Queue
-                </h2>
-                <div class="queue-stats">
-                    <span class="queue-stat">Waiting: <strong id="queueWaiting">0</strong></span>
-                    <span class="queue-stat">Avg Wait: <strong id="avgQueueTime">0s</strong></span>
+                    <div class="stat-content">
+                        <span class="stat-value" id="roomOnlineCount">1</span>
+                        <span class="stat-label">Online</span>
+                    </div>
                 </div>
-            </div>
-            <div class="queue-grid">
-                <div id="queueList1" class="queue-container"></div>
-                <div id="queueList2" class="queue-container"></div>
-            </div>
-        </div>
-
-        <!-- Network Performance Section -->
-        <div class="section">
-            <div class="section-header">
-                <h2 class="section-title">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                <div class="room-stat-box secure">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.5">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                        <path d="M9 12l2 2 4-4" stroke="#10b981" />
                     </svg>
-                    Network Performance
-                </h2>
-            </div>
-            <div class="performance-card">
-                <div class="speed-graph">
-                    <canvas id="miniSpeedGraph" width="600" height="200"></canvas>
-                </div>
-                <div class="performance-metrics">
-                    <div class="metric">
-                        <span class="metric-label">Peak Speed</span>
-                        <span class="metric-value" id="topSpeedValue">0 MB/s</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-label">Completed</span>
-                        <span class="metric-value success" id="completedToday">0</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-label">Failed</span>
-                        <span class="metric-value error" id="failedTransfers">0</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-label">Active</span>
-                        <span class="metric-value" id="connectionStat">0/3</span>
+                    <div class="stat-content">
+                        <span class="stat-value">Secure</span>
+                        <span class="stat-label">Encrypted</span>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Toast Notification -->
-        <div id="toast" class="toast">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="20 6 9 17 4 12"/>
-            </svg>
-            <span class="toast-message">File received successfully!</span>
-        </div>
-
-        <!-- Create Room Modal -->
-        <div id="createRoomModal" class="modal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2>Create Private Room</h2>
-                    <button class="modal-close" onclick="closeCreateRoomModal()">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label>Room Password (Optional)</label>
-                        <div class="password-input-container">
-                            <input type="password" id="roomPassword" placeholder="Leave empty for no password" />
-                            <button type="button" class="btn-toggle-password" onclick="togglePasswordVisibility('roomPassword')" title="Show/Hide password">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                                    <circle cx="12" cy="12" r="3"/>
-                                </svg>
-                            </button>
-                            <button type="button" class="btn-generate-password" onclick="generateSecurePassword()" title="Generate and copy secure password">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
-                                </svg>
-                                Generate & Copy
-                            </button>
-                        </div>
-                        <div class="password-strength" id="passwordStrength" style="display: none;">
-                            <div class="strength-bar">
-                                <div class="strength-bar-fill" id="strengthBarFill"></div>
-                            </div>
-                            <span class="strength-text" id="strengthText">Weak</span>
-                        </div>
-                        <small>🔒 Zero-knowledge verification - we never see your password</small>
-                        <small class="password-requirements">
-                            💡 Click "Generate & Copy" to create a secure password (auto-copied to clipboard)
-                        </small>
+            <div class="room-protection-card">
+                <div class="protection-header-compact">
+                    <div class="shield-icon-compact">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                            <path d="M9 12l2 2 4-4" stroke="#10b981" />
+                        </svg>
                     </div>
-                    <div class="form-group">
-                        <label>Room Expires In</label>
-                        <select id="roomExpiry">
-                            <option value="3600000">1 Hour</option>
-                            <option value="86400000" selected>24 Hours</option>
-                            <option value="604800000">7 Days</option>
-                            <option value="0">Never</option>
+                    <div class="protection-info-compact">
+                        <h4>Triple-Layer Protection</h4>
+                        <span class="status-active-compact">All encryption active</span>
+                    </div>
+                </div>
+                <div class="protection-details-compact">
+                    <div class="p-item-compact">
+                        <div class="p-left"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <path
+                                    d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+                            </svg> Session Key</div>
+                        <div class="p-right-compact">AES-256-GCM</div>
+                    </div>
+                    <div class="p-item-compact">
+                        <div class="p-left"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                            </svg> Room Encryption</div>
+                        <div class="p-right-compact">AES-256-GCM</div>
+                    </div>
+                    <div class="p-item-compact">
+                        <div class="p-left"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                                <circle cx="12" cy="12" r="3" />
+                            </svg> Digital Signature</div>
+                        <div class="p-right-compact">RSA-OAEP</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="room-active-badge">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                Private Room Active
+            </div>
+
+            <button class="btn-leave-room" onclick="window.leavePrivateRoom()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                    <polyline points="16 17 21 12 16 7" />
+                    <line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
+                Leave Room
+            </button>
+        </aside>
+
+        <div class="main-layout">
+            <!-- Main Content Area -->
+            <main class="main-content">
+                <!-- Upload Zone -->
+                <div class="upload-area" id="uploadArea">
+                    <input type="file" id="fileInput" multiple hidden>
+                    <div class="upload-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="17 8 12 3 7 8" />
+                            <line x1="12" y1="3" x2="12" y2="15" />
+                        </svg>
+                    </div>
+                    <div class="upload-text">
+                        <h2>Drag & drop files here</h2>
+                        <p>or click to browse</p>
+                    </div>
+                </div>
+
+                <!-- Transfer Queue -->
+                <section class="queue-section" id="queueSection">
+                    <div class="section-header">
+                        <div class="section-title">
+                            <h2>Transfer Queue</h2>
+                            <span class="pill active" id="activeCountBadge">0 active</span>
+                            <span class="pill queued" id="queuedCountBadge">0 queued</span>
+                        </div>
+                        <select id="schedulingAlgorithm" onchange="window.changeSchedulingAlgorithm()">
+                            <option value="FCFS">Priority (FCFS)</option>
+                            <option value="SJF">Shortest Job First</option>
+                            <option value="Priority">Priority Scheduling</option>
                         </select>
                     </div>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn-secondary" onclick="closeCreateRoomModal()">Cancel</button>
-                    <button class="btn-primary" onclick="createRoom()">Create Room</button>
-                </div>
-            </div>
-        </div>
 
-        <!-- Room Link Modal -->
-        <div id="roomLinkModal" class="modal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2>Room Created! 🎉</h2>
-                    <button class="modal-close" onclick="closeRoomLinkModal()">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <div class="room-id-display">
-                        <div class="room-id-label">Room ID (Click to Copy)</div>
-                        <div class="room-id-value" id="displayRoomId" onclick="copyRoomId()" title="Click to copy">-</div>
+                    <div class="queue-list" id="queueList">
+                        <!-- Queue items will be injected here -->
                     </div>
-                    <p>Share this link with people you want to invite:</p>
-                    <div class="share-link-container">
-                        <input type="text" id="roomLinkInput" readonly />
-                        <button class="btn-copy" onclick="copyRoomLink()">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </section>
+
+                <!-- My Shared Files -->
+                <section class="files-section">
+                    <div class="section-header">
+                        <div class="section-title">
+                            <h2>My Shared Files</h2>
+                        </div>
+                    </div>
+                    <div class="files-list" id="myFilesList">
+                        <!-- Shared files will be injected here -->
+                    </div>
+                </section>
+
+                <!-- Available Files -->
+                <section class="files-section">
+                    <div class="section-header">
+                        <div class="section-title">
+                            <h2>Available Files</h2>
+                        </div>
+                        <a href="#" class="remove-all-link" id="removeAllBtn"
+                            onclick="window.removeAllSharedFiles(); return false;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <polyline points="3 6 5 6 21 6" />
+                                <path
+                                    d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                             </svg>
-                            Copy
-                        </button>
+                            Remove All
+                        </a>
                     </div>
-                    <div class="qr-code-container">
-                        <div id="qrCode"></div>
-                        <p>Scan QR code with mobile</p>
+                    <div class="files-grid" id="availableFiles">
+                        <!-- File cards will be injected here -->
                     </div>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn-primary" onclick="joinCreatedRoom()">Join Room Now</button>
-                </div>
-            </div>
-        </div>
+                </section>
+            </main>
 
-        <!-- Join Room Modal (Password) -->
-        <div id="joinRoomModal" class="modal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2>Join Private Room</h2>
-                    <button class="modal-close" onclick="closeJoinRoomModal()">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <p>This room is password-protected</p>
-                    <div class="form-group">
-                        <label>Room Password</label>
-                        <input type="password" id="joinRoomPassword" placeholder="Enter room password" />
-                        <small>🔒 Your password is verified using zero-knowledge proof</small>
+            <!-- Sidebar Area -->
+            <aside class="sidebar">
+                <!-- Protection Status -->
+                <div class="sidebar-card protection">
+                    <div class="protection-header">
+                        <div class="shield-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                                <path d="M9 12l2 2 4-4" stroke="#10b981" />
+                            </svg>
+                        </div>
+                        <div class="protection-info">
+                            <h3>Triple-Layer Protection</h3>
+                            <span class="status-active">All encryption active</span>
+                        </div>
                     </div>
-                    <div id="joinRoomError" class="error-message" style="display: none;"></div>
+                    <div class="protection-details">
+                        <div class="p-item">
+                            <div class="p-left"><svg class="key-icon" viewBox="0 0 24 24" width="14" height="14"
+                                    fill="none" stroke="currentColor" stroke-width="2">
+                                    <path
+                                        d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+                                </svg> Session Key</div>
+                            <div class="p-right">AES-256-GCM</div>
+                        </div>
+                        <div class="p-item">
+                            <div class="p-left"><svg class="lock-icon" viewBox="0 0 24 24" width="14" height="14"
+                                    fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                                </svg> Room Encryption</div>
+                            <div class="p-right">AES-256-GCM</div>
+                        </div>
+                        <div class="p-item">
+                            <div class="p-left"><svg class="sig-icon" viewBox="0 0 24 24" width="14" height="14"
+                                    fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                                    <circle cx="12" cy="12" r="3" />
+                                </svg> Digital Signature</div>
+                            <div class="p-right">RSA-OAEP</div>
+                        </div>
+                    </div>
                 </div>
-                <div class="modal-footer">
-                    <button class="btn-secondary" onclick="closeJoinRoomModal()">Cancel</button>
-                    <button class="btn-primary" onclick="submitRoomPassword()">Join Room</button>
-                </div>
-            </div>
-        </div>
 
-        <!-- Join Room Prompt Modal (Enter Room ID) -->
-        <div id="joinRoomPromptModal" class="modal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2>Join Room</h2>
-                    <button class="modal-close" onclick="closeJoinRoomPromptModal()">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <p>Enter the room ID to join</p>
-                    <div class="form-group">
-                        <label>Room ID</label>
-                        <input type="text" id="joinRoomIdInput" placeholder="e.g., abc123xyz" maxlength="9" />
-                        <small>💡 Get the room ID from the person who created the room</small>
+                <!-- Controls -->
+                <div class="sidebar-card incognito-card">
+                    <div class="incognito-row">
+                        <div class="row-left">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                <circle cx="12" cy="12" r="3" />
+                                <path d="M3 3l18 18" class="incognito-slash hidden" />
+                            </svg>
+                            <span>Incognito Mode</span>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="incognitoToggle">
+                            <span class="slider round"></span>
+                        </label>
                     </div>
-                    <div id="joinRoomPromptError" class="error-message" style="display: none;"></div>
                 </div>
-                <div class="modal-footer">
-                    <button class="btn-secondary" onclick="closeJoinRoomPromptModal()">Cancel</button>
-                    <button class="btn-primary" onclick="submitJoinRoomId()">Continue</button>
+
+                <div class="sidebar-actions">
+                    <button class="btn-create-room" id="createRoomBtn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2.5">
+                            <line x1="12" y1="5" x2="12" y2="19" />
+                            <line x1="5" y1="12" x2="19" y2="12" />
+                        </svg>
+                        Create Private Room
+                    </button>
+                    <button class="btn-join-room" id="joinRoomBtn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2.5">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                            <circle cx="9" cy="7" r="4" />
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                        </svg>
+                        Join Room
+                    </button>
                 </div>
-            </div>
+
+                <!-- Network Stats -->
+                <div class="sidebar-card network-stats">
+                    <div class="card-header">
+                        <div class="header-left">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                            </svg>
+                            <span>Network Speed</span>
+                        </div>
+                        <div class="header-right">
+                            <div class="legend"><span class="dot upload"></span> Upload</div>
+                            <div class="legend"><span class="dot download"></span> Download</div>
+                        </div>
+                    </div>
+                    <canvas id="speedGraph" width="280" height="120"></canvas>
+                    <div class="live-indicator">
+                        <span class="pulse"></span>
+                        Live
+                    </div>
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="stats-grid">
+                    <div class="stat-box cyan">
+                        <div class="stat-top">
+                            <div class="stat-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2.5">
+                                    <polyline points="17 7 7 17" />
+                                    <polyline points="7 7 17 7 17 17" />
+                                </svg></div>
+                            <span class="stat-label">Upload</span>
+                        </div>
+                        <div class="stat-value" id="currentUploadSpeed">0.0 KB/s</div>
+                    </div>
+                    <div class="stat-box violet">
+                        <div class="stat-top">
+                            <div class="stat-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2.5">
+                                    <polyline points="7 17 17 7" />
+                                    <polyline points="7 7 7 17 17 17" />
+                                </svg></div>
+                            <span class="stat-label">Download</span>
+                        </div>
+                        <div class="stat-value" id="currentDownloadSpeed">0.0 KB/s</div>
+                    </div>
+                    <div class="stat-box emerald">
+                        <div class="stat-top">
+                            <div class="stat-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2.5">
+                                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                    <circle cx="9" cy="7" r="4" />
+                                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                                </svg></div>
+                            <span class="stat-label">Connections</span>
+                        </div>
+                        <div class="stat-value" id="activeConnections">0</div>
+                    </div>
+                    <div class="stat-box amber">
+                        <div class="stat-top">
+                            <div class="stat-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2.5">
+                                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                                </svg></div>
+                            <span class="stat-label">Queued</span>
+                        </div>
+                        <div class="stat-value" id="queuedCount">0</div>
+                    </div>
+                </div>
+
+                <!-- Resource Utilization -->
+                <div class="sidebar-card utilization">
+                    <div class="u-header">
+                        <div class="u-left icon-gauge">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M12 2v2" />
+                                <path d="M12 20v2" />
+                                <path d="M4.93 4.93l1.41 1.41" />
+                                <path d="M17.66 17.66l1.41 1.41" />
+                                <path d="M2 12h2" />
+                                <path d="M20 12h2" />
+                                <path d="M6.34 17.66l-1.41 1.41" />
+                                <path d="M19.07 4.93l-1.41 1.41" />
+                                <path d="M12 12l2.5 2.5" />
+                            </svg>
+                            <span>Resource Utilization</span>
+                        </div>
+                        <span class="u-value" id="utilizationValue">0%</span>
+                    </div>
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar-fill grad-util" id="utilizationBar" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Performance Metrics -->
+                <div class="metrics-row">
+                    <div class="metric-box">
+                        <div class="m-top"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10" />
+                                <polyline points="12 6 12 12 16 14" />
+                            </svg> Avg Wait</div>
+                        <div class="m-value" id="avgWaitTime">0.0s</div>
+                    </div>
+                    <div class="metric-box">
+                        <div class="m-top"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                            </svg> Throughput</div>
+                        <div class="m-value" id="throughputValue">0/min</div>
+                    </div>
+                </div>
+
+                <div class="sidebar-card peak-speed">
+                    <span class="peak-label">Peak Speed</span>
+                    <span class="peak-value" id="peakSpeedValue">0.0 MB/s</span>
+                </div>
+            </aside>
         </div>
     </div>
 
-    <!-- Mail Us Button (Fixed at bottom) -->
-    <button class="mail-us-btn" onclick="window.open('https://mail.google.com/mail/?view=cm&fs=1&to=aadipandey223@gmail.com&su=Secure%20Share%20-%20Feedback&body=Hi%2C%0A%0AI%20would%20like%20to%20share%20my%20feedback%3A%0A%0A', '_blank')" title="Send us an email">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-            <polyline points="22,6 12,13 2,6"/>
-        </svg>
-        <span>Mail Us</span>
-    </button>
+    <!-- Modals and Hidden Elements -->
+    <div id="toast" class="hidden">
+        <span class="toast-message"></span>
+    </div>
+    <div id="createRoomModal" class="hidden"></div>
+    <div id="roomLinkModal" class="hidden"></div>
+    <div id="joinRoomModal" class="hidden"></div>
+    <div id="joinRoomPromptModal" class="hidden"></div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="/crypto-client.js"></script>
     <script src="/app.js"></script>
 </body>
+
 </html>
