@@ -1,0 +1,5 @@
+{
+  "name": "VaultBeam",
+  "description": "Zero-knowledge peer-to-peer encrypted file transfer console with triple-layer Web Crypto, private rooms, and OS transfer queue scheduling.",
+  "requestFramePermissions": []
+}

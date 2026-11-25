@@ -1,0 +1,351 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-display: "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-sans: "DM Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* ============================================================
+   VaultBeam Subtle Monochrome Theme System (Zero Blue)
+   1. Light (Default — Gallery Paper, Crisp White, Pure Ink)
+   2. Dark  (Matte Charcoal, Deep Graphite, Chalk White)
+   3. Cipher (Unlockable — Quiet Graphite & Brushed Silver)
+   ============================================================ */
+
+:root,
+[data-theme="light"] {
+  --vb-canvas: #FAFAFA;
+  --vb-surface: #FFFFFF;
+  --vb-surface-2: #F4F4F5;
+  --vb-surface-hover: #ECECEF;
+  --vb-border: #E4E4E7;
+  --vb-border-strong: #D4D4D8;
+  --vb-ink: #111111;
+  --vb-ink-2: #52525B;
+  --vb-ink-muted: #71717A;
+  --vb-accent: #111111;
+  --vb-accent-hover: #27272A;
+  --vb-accent-soft: rgba(17, 17, 17, 0.06);
+  --vb-accent-ink: #FFFFFF;
+  --vb-verified: #15803D;
+  --vb-verified-soft: rgba(21, 128, 61, 0.08);
+  --vb-caution: #A16207;
+  --vb-caution-soft: rgba(161, 98, 7, 0.09);
+  --vb-danger: #B91C1C;
+  --vb-danger-soft: rgba(185, 28, 28, 0.08);
+  --vb-backdrop: rgba(17, 17, 17, 0.42);
+  --vb-shadow: 0 12px 32px -16px rgba(0, 0, 0, 0.14);
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --vb-canvas: #0B0B0C;
+  --vb-surface: #131315;
+  --vb-surface-2: #1B1B1E;
+  --vb-surface-hover: #242428;
+  --vb-border: #26262A;
+  --vb-border-strong: #3A3A40;
+  --vb-ink: #F4F4F5;
+  --vb-ink-2: #A1A1AA;
+  --vb-ink-muted: #71717A;
+  --vb-accent: #F4F4F5;
+  --vb-accent-hover: #D4D4D8;
+  --vb-accent-soft: rgba(244, 244, 245, 0.08);
+  --vb-accent-ink: #0B0B0C;
+  --vb-verified: #4ADE80;
+  --vb-verified-soft: rgba(74, 222, 128, 0.10);
+  --vb-caution: #FBBF24;
+  --vb-caution-soft: rgba(251, 191, 36, 0.10);
+  --vb-danger: #F87171;
+  --vb-danger-soft: rgba(248, 113, 113, 0.10);
+  --vb-backdrop: rgba(0, 0, 0, 0.68);
+  --vb-shadow: 0 16px 36px -14px rgba(0, 0, 0, 0.65);
+  color-scheme: dark;
+}
+
+[data-theme="cipher"] {
+  --vb-canvas: #080908;
+  --vb-surface: #101211;
+  --vb-surface-2: #171B19;
+  --vb-surface-hover: #1F2522;
+  --vb-border: #232A26;
+  --vb-border-strong: #34403A;
+  --vb-ink: #ECEFED;
+  --vb-ink-2: #9CA8A1;
+  --vb-ink-muted: #6C7871;
+  --vb-accent: #D7E2DC;
+  --vb-accent-hover: #FFFFFF;
+  --vb-accent-soft: rgba(215, 226, 220, 0.09);
+  --vb-accent-ink: #080908;
+  --vb-verified: #4ADE80;
+  --vb-verified-soft: rgba(74, 222, 128, 0.10);
+  --vb-caution: #EAB308;
+  --vb-caution-soft: rgba(234, 179, 8, 0.10);
+  --vb-danger: #F87171;
+  --vb-danger-soft: rgba(248, 113, 113, 0.10);
+  --vb-backdrop: rgba(4, 6, 5, 0.72);
+  --vb-shadow: 0 16px 36px -14px rgba(0, 0, 0, 0.7);
+  color-scheme: dark;
+}
+
+/* ============================================================
+   Private Room Mineral / Ore Chemistry Theme Overrides
+   Automatically activated ONLY when inside a Private Room.
+   Open Lobby remains pure monochrome B&W.
+   1. Aurum (Au · 79)      — Brushed Gold & Limestone / Basalt
+   2. Cuprum (Cu · 29)     — Native Copper & Quartz / Cuprite
+   3. Malachite (Cu₂CO₃)   — Mineral Jade & Dolomite / Serpentine
+   4. Pyrite (FeS₂)        — Smoked Brass & Linen / Gunmetal
+   ============================================================ */
+
+[data-theme="light"][data-vault-ore="aurum"] {
+  --vb-canvas: #FAF7F0;
+  --vb-surface: #FFFFFF;
+  --vb-surface-2: #F4EDE0;
+  --vb-surface-hover: #EBE1CE;
+  --vb-border: #E2D5BC;
+  --vb-border-strong: #CBB78F;
+  --vb-ink: #1C160C;
+  --vb-ink-2: #5C4E38;
+  --vb-ink-muted: #827154;
+  --vb-accent: #8A6414;
+  --vb-accent-hover: #6E4E0E;
+  --vb-accent-soft: rgba(138, 100, 20, 0.10);
+  --vb-accent-ink: #FFFFFF;
+}
+
+[data-theme="dark"][data-vault-ore="aurum"],
+[data-theme="cipher"][data-vault-ore="aurum"] {
+  --vb-canvas: #0E0C08;
+  --vb-surface: #16130D;
+  --vb-surface-2: #201B12;
+  --vb-surface-hover: #2B2418;
+  --vb-border: #332B1D;
+  --vb-border-strong: #4B3E28;
+  --vb-ink: #F5EFE2;
+  --vb-ink-2: #B9AC93;
+  --vb-ink-muted: #8A7D65;
+  --vb-accent: #D6B15B;
+  --vb-accent-hover: #E5C576;
+  --vb-accent-soft: rgba(214, 177, 91, 0.12);
+  --vb-accent-ink: #0E0C08;
+}
+
+[data-theme="light"][data-vault-ore="cuprum"] {
+  --vb-canvas: #FAF5F2;
+  --vb-surface: #FFFFFF;
+  --vb-surface-2: #F3E8E2;
+  --vb-surface-hover: #E9DAD2;
+  --vb-border: #E2CEC4;
+  --vb-border-strong: #CCAFA1;
+  --vb-ink: #1E1410;
+  --vb-ink-2: #61483E;
+  --vb-ink-muted: #876A5E;
+  --vb-accent: #8C4124;
+  --vb-accent-hover: #70331B;
+  --vb-accent-soft: rgba(140, 65, 36, 0.10);
+  --vb-accent-ink: #FFFFFF;
+}
+
+[data-theme="dark"][data-vault-ore="cuprum"],
+[data-theme="cipher"][data-vault-ore="cuprum"] {
+  --vb-canvas: #0F0B09;
+  --vb-surface: #18120F;
+  --vb-surface-2: #221A16;
+  --vb-surface-hover: #2D221D;
+  --vb-border: #372923;
+  --vb-border-strong: #503B32;
+  --vb-ink: #F6ECE8;
+  --vb-ink-2: #BCA69C;
+  --vb-ink-muted: #8D766C;
+  --vb-accent: #D48464;
+  --vb-accent-hover: #E3997B;
+  --vb-accent-soft: rgba(212, 132, 100, 0.12);
+  --vb-accent-ink: #0F0B09;
+}
+
+[data-theme="light"][data-vault-ore="malachite"] {
+  --vb-canvas: #F4F8F5;
+  --vb-surface: #FFFFFF;
+  --vb-surface-2: #E8F0EB;
+  --vb-surface-hover: #DCE7E0;
+  --vb-border: #CFE0D6;
+  --vb-border-strong: #B0CAB9;
+  --vb-ink: #101C16;
+  --vb-ink-2: #415B4E;
+  --vb-ink-muted: #658072;
+  --vb-accent: #1B5E42;
+  --vb-accent-hover: #144A33;
+  --vb-accent-soft: rgba(27, 94, 66, 0.10);
+  --vb-accent-ink: #FFFFFF;
+}
+
+[data-theme="dark"][data-vault-ore="malachite"],
+[data-theme="cipher"][data-vault-ore="malachite"] {
+  --vb-canvas: #090E0C;
+  --vb-surface: #101915;
+  --vb-surface-2: #17231E;
+  --vb-surface-hover: #203029;
+  --vb-border: #25382F;
+  --vb-border-strong: #375346;
+  --vb-ink: #EBF4EE;
+  --vb-ink-2: #9DB5A7;
+  --vb-ink-muted: #6F887A;
+  --vb-accent: #68B894;
+  --vb-accent-hover: #82C9A8;
+  --vb-accent-soft: rgba(104, 184, 148, 0.12);
+  --vb-accent-ink: #090E0C;
+}
+
+[data-theme="light"][data-vault-ore="pyrite"] {
+  --vb-canvas: #F7F6F1;
+  --vb-surface: #FFFFFF;
+  --vb-surface-2: #ECEBE1;
+  --vb-surface-hover: #E2E0D3;
+  --vb-border: #DAD7C7;
+  --vb-border-strong: #C2BEA8;
+  --vb-ink: #191913;
+  --vb-ink-2: #555444;
+  --vb-ink-muted: #787763;
+  --vb-accent: #685D2C;
+  --vb-accent-hover: #524921;
+  --vb-accent-soft: rgba(104, 93, 44, 0.10);
+  --vb-accent-ink: #FFFFFF;
+}
+
+[data-theme="dark"][data-vault-ore="pyrite"],
+[data-theme="cipher"][data-vault-ore="pyrite"] {
+  --vb-canvas: #0C0C0A;
+  --vb-surface: #151511;
+  --vb-surface-2: #1E1E19;
+  --vb-surface-hover: #282821;
+  --vb-border: #313128;
+  --vb-border-strong: #474739;
+  --vb-ink: #F2F1E8;
+  --vb-ink-2: #B0AF9A;
+  --vb-ink-muted: #82816E;
+  --vb-accent: #C9BC7E;
+  --vb-accent-hover: #DAD098;
+  --vb-accent-soft: rgba(201, 188, 126, 0.12);
+  --vb-accent-ink: #0C0C0A;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    background-color: var(--vb-canvas);
+    color: var(--vb-ink);
+  }
+
+  body {
+    background-color: var(--vb-canvas);
+    color: var(--vb-ink);
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    text-wrap: balance;
+  }
+
+  ::selection {
+    background-color: var(--vb-accent);
+    color: var(--vb-accent-ink);
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Single-elevation flat architectural surfaces with hairline borders */
+.vb-panel {
+  background-color: var(--vb-surface);
+  border: 1px solid var(--vb-border);
+}
+
+.vb-panel-elevated {
+  background-color: var(--vb-surface);
+  border: 1px solid var(--vb-border-strong);
+  box-shadow: var(--vb-shadow);
+}
+
+.vb-inset {
+  background-color: var(--vb-canvas);
+  border: 1px solid var(--vb-border);
+}
+
+.vb-ore-bar {
+  border-top: 2px solid var(--vb-accent);
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Subtle scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--vb-border-strong);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vb-ink-muted);
+}
+
+/* Restrained fade for modals only (zero bouncing or ambient motion) */
+@keyframes vb-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes vb-pulse-ring {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.45;
+  }
+  100% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+
+.animate-vb-fade {
+  animation: vb-fade-in 140ms ease-out forwards;
+}
+
+.animate-vb-ring {
+  animation: vb-pulse-ring 650ms ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

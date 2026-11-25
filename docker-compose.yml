@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  p2p-app:
+  vaultbeam:
     build: .
     ports:
       - "3000:3000"
